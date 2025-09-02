@@ -67,13 +67,16 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
   const browser = await launchChromium();
   const context = await browser.newContext();
   const page = await context.newPage();
+  const steps = [];
   try {
+    steps.push('Navigating to site');
     await page.goto('https://www.webuyanycarusa.com/?r=1', { waitUntil: 'domcontentloaded', timeout: 90000 });
 
     // Click VIN link
     const vinLink = page.locator('a', { hasText: 'VIN' });
     await vinLink.first().click();
 
+    steps.push(`Sending info to web: VIN=${vin}, Mileage=${mileage}, Zip=${zip}, Email=${email}`);
     // Enter VIN (try several candidates)
     const vinSelectors = [
       'input[name="vin"]',
@@ -91,6 +94,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     }
     if (!vinFilled) throw new Error('Could not find VIN input');
 
+    steps.push('Clicking Value My Car');
     // Click Value My Car (try several CTA variants)
     const ctaCandidates = [
       page.getByRole('button', { name: /Value My Car/i }),
@@ -112,6 +116,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     await page.waitForLoadState('domcontentloaded', { timeout: 90000 });
 
     // Enter mileage (Vehicle Condition page has placeholder "Enter Vehicle Mileage")
+    steps.push('Filling Vehicle Condition: mileage');
     let mileageFilled = false;
     try {
       const mil = page.getByPlaceholder(/Enter\s+Vehicle\s+Mileage/i);
@@ -131,6 +136,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     if (!mileageFilled) throw new Error('Could not find mileage/odometer input');
 
     // Zip code (placeholder "Enter ZIP Code")
+    steps.push('Filling Vehicle Condition: ZIP code');
     let zipFilled = false;
     try {
       const zipEl = page.getByPlaceholder(/Enter\s+ZIP\s+Code/i);
@@ -147,6 +153,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     }
 
     // Email (placeholder "Enter Email Address")
+    steps.push('Filling Vehicle Condition: email');
     let emailFilled = false;
     try {
       const emailEl = page.getByPlaceholder(/Enter\s+Email\s+Address/i);
@@ -163,7 +170,20 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     }
 
     // Click See your valuation
+    // Take a screenshot of filled Vehicle Condition form
+    let filledShot = null;
+    try {
+      const shotsDir = path.join(__dirname, 'public', 'shots');
+      if (!fs.existsSync(shotsDir)) fs.mkdirSync(shotsDir, { recursive: true });
+      const name = `filled-${Date.now()}.png`;
+      const filePath = path.join(shotsDir, name);
+      await page.screenshot({ path: filePath, fullPage: true });
+      filledShot = `/shots/${name}`;
+      steps.push(`Captured screenshot before submit: ${filledShot}`);
+    } catch (_) {}
+
     // Click See Your Valuation
+    steps.push('Clicking See Your Valuation');
     const seeValBtn = page.getByRole('button', { name: /See\s+Your\s+Valuation/i });
     if (await seeValBtn.count()) {
       await seeValBtn.first().click();
@@ -178,6 +198,18 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
 
     // Wait for valuation result to appear
     await page.waitForLoadState('networkidle', { timeout: 90000 });
+
+    // Take screenshot of valuation page
+    let resultShot = null;
+    try {
+      const shotsDir = path.join(__dirname, 'public', 'shots');
+      if (!fs.existsSync(shotsDir)) fs.mkdirSync(shotsDir, { recursive: true });
+      const name = `valuation-${Date.now()}.png`;
+      const filePath = path.join(shotsDir, name);
+      await page.screenshot({ path: filePath, fullPage: true });
+      resultShot = `/shots/${name}`;
+      steps.push(`Captured valuation screenshot: ${resultShot}`);
+    } catch (_) {}
 
     // Try to locate a price element
     const priceSelectors = [
@@ -209,7 +241,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       throw new Error('Could not find valuation on the page. The site may have changed.');
     }
 
-    return { valuation: valuationText };
+    return { valuation: valuationText, steps, screenshots: { filled: filledShot, result: resultShot } };
   } finally {
     await context.close();
     await browser.close();
@@ -231,6 +263,11 @@ app.post('/api/value', async (req, res) => {
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Expose server defaults for client prefill
+app.get('/api/defaults', (_req, res) => {
+  res.json({ zip: DEFAULT_ZIP, email: DEFAULT_EMAIL });
 });
 
 app.listen(PORT, () => {
