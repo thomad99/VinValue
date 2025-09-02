@@ -1,0 +1,24 @@
+write a web page that will value a car based on VIn and mileage
+it will use the website webuyany car
+
+you will need to launch a browser and fill in the info to save me manually doing it 
+so the prompt you will display in a webpage will that will ask
+
+I was thinking a script that can do it , feed the script the VIN & Mileage and it willreturn the valuation.
+
+
+to get the valuation from webuyanycar you will need 
+you will use 
+
+https://www.webuyanycarusa.com/?r=1
+
+then click VIN link
+enter the VIN
+Click Value My Car
+What Does the Odometer Read? enter the mileage
+Zip Code  enter 34238
+Email Address : Thomad99@gmail.com
+
+Click See your valuation
+
+

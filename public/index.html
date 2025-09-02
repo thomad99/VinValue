@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VIN Value</title>
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 24px; background: #0f172a; color: #e2e8f0; }
+      .container { max-width: 680px; margin: 0 auto; }
+      h1 { margin: 0 0 16px; font-size: 28px; }
+      form { display: grid; gap: 12px; background: #111827; padding: 16px; border-radius: 8px; border: 1px solid #1f2937; }
+      label { display: block; font-size: 14px; color: #cbd5e1; }
+      input { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid #374151; background: #0b1020; color: #e5e7eb; }
+      button { padding: 10px 14px; border-radius: 6px; border: 1px solid #334155; background: #2563eb; color: white; cursor: pointer; font-weight: 600; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .result { margin-top: 16px; padding: 12px; border-radius: 8px; border: 1px solid #1f2937; background: #0b1020; }
+      .muted { color: #94a3b8; font-size: 13px; }
+      a { color: #93c5fd; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>VIN Value</h1>
+      <p class="muted">Fetch valuation from <a href="https://www.webuyanycarusa.com/?r=1" target="_blank" rel="noreferrer">webuyanycarusa.com</a>. Your inputs are sent to your local server only.</p>
+      <form id="valueForm">
+        <div>
+          <label for="vin">VIN</label>
+          <input id="vin" name="vin" placeholder="Enter VIN" required />
+        </div>
+        <div class="row">
+          <div>
+            <label for="mileage">Mileage</label>
+            <input id="mileage" name="mileage" type="number" placeholder="e.g. 45000" required />
+          </div>
+          <div>
+            <label for="zip">Zip Code</label>
+            <input id="zip" name="zip" placeholder="34238" value="34238" />
+          </div>
+        </div>
+        <div>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" placeholder="name@example.com" value="Thomad99@gmail.com" />
+        </div>
+        <button id="submit" type="submit">Get Valuation</button>
+      </form>
+      <div id="result" class="result" hidden>
+        <div id="price" style="font-size: 20px; font-weight: 700;"></div>
+        <div id="error" style="color: #fca5a5"></div>
+      </div>
+    </div>
+    <script>
+      const form = document.getElementById('valueForm');
+      const result = document.getElementById('result');
+      const price = document.getElementById('price');
+      const error = document.getElementById('error');
+      const submit = document.getElementById('submit');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        result.hidden = true;
+        price.textContent = '';
+        error.textContent = '';
+        submit.disabled = true;
+        submit.textContent = 'Working…';
+        try {
+          const payload = {
+            vin: document.getElementById('vin').value.trim(),
+            mileage: document.getElementById('mileage').value.trim(),
+            zip: document.getElementById('zip').value.trim(),
+            email: document.getElementById('email').value.trim(),
+          };
+          const res = await fetch('/api/value', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          result.hidden = false;
+          if (!res.ok) throw new Error(data.error || 'Failed');
+          price.textContent = data.valuation;
+        } catch (err) {
+          result.hidden = false;
+          error.textContent = err.message || 'Something went wrong';
+        } finally {
+          submit.disabled = false;
+          submit.textContent = 'Get Valuation';
+        }
+      });
+    </script>
+  </body>
+  </html>
+
+

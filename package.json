@@ -1,0 +1,19 @@
+{
+  "name": "vinvalue",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web app to fetch car valuation from webuyanycar using VIN and mileage",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "postinstall": "npx --yes playwright install chromium"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "playwright": "^1.47.0"
+  }
+}
+
+

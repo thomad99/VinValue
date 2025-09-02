@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: vinvalue
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/project/.playwright
+    disk:
+      name: pw-browsers
+      mountPath: /opt/render/project/.playwright
+      sizeGB: 1
+
