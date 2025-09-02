@@ -10,13 +10,10 @@ services:
       - key: NODE_VERSION
         value: 18
       - key: PLAYWRIGHT_BROWSERS_PATH
-        value: /opt/render/project/.playwright
+        value: "0"
       - key: WEBUYEMAIL
         sync: false
       - key: WEBUYZIPCODE
         sync: false
-    disk:
-      name: pw-browsers
-      mountPath: /opt/render/project/.playwright
-      sizeGB: 1
+    # No persistent disk needed when PLAYWRIGHT_BROWSERS_PATH=0 (browsers ship in node_modules)
 
