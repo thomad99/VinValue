@@ -115,39 +115,34 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     // Wait for next page to render (URL may vary: vehicledetails or vehiclecondition)
     await page.waitForLoadState('domcontentloaded', { timeout: 90000 });
 
-    // Check if we're on Vehicle Details page (step 2) and need to select body type
+    // Check if we're on Vehicle Details page (step 2) and need to select dropdowns
     const currentUrl = page.url();
     if (currentUrl.includes('vehicledetails') || currentUrl.includes('vehicle-details')) {
-      steps.push('On Vehicle Details page - selecting body type');
+      steps.push('On Vehicle Details page - filling all dropdowns');
       
-      // Look for body type dropdown and select first option
-      const bodyTypeSelectors = [
-        'select[name*="body" i]',
-        'select[name*="type" i]',
-        'select[aria-label*="body" i]',
-        '.dropdown select',
-        'select'
-      ];
+      // Find all dropdowns/selects on the page
+      const allSelects = await page.locator('select').all();
+      let dropdownsFilled = 0;
       
-      let bodyTypeSelected = false;
-      for (const sel of bodyTypeSelectors) {
-        const select = page.locator(sel).first();
-        if (await select.count()) {
-          const options = await select.locator('option').all();
-          if (options.length > 1) {
-            // Select the first non-empty option (skip "Select..." placeholder)
-            for (let i = 1; i < options.length; i++) {
-              const value = await options[i].getAttribute('value');
-              if (value && value.trim()) {
-                await select.selectOption(value);
-                bodyTypeSelected = true;
-                steps.push(`Selected body type: ${value}`);
-                break;
-              }
+      for (const select of allSelects) {
+        const options = await select.locator('option').all();
+        if (options.length > 1) {
+          // Select the first non-empty option (skip "Select..." placeholder)
+          for (let i = 1; i < options.length; i++) {
+            const value = await options[i].getAttribute('value');
+            const text = await options[i].textContent();
+            if (value && value.trim() && text && !text.toLowerCase().includes('select')) {
+              await select.selectOption(value);
+              dropdownsFilled++;
+              steps.push(`Selected dropdown option: ${text.trim()}`);
+              break;
             }
           }
-          if (bodyTypeSelected) break;
         }
+      }
+      
+      if (dropdownsFilled === 0) {
+        steps.push('No dropdowns found to fill');
       }
       
       // Click Continue to proceed to Vehicle Condition page
