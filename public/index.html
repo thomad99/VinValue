@@ -42,15 +42,16 @@
       .container { max-width: 680px; margin: 0 auto; }
       h1 { margin: 0 0 16px; font-size: 28px; }
       form { display: grid; gap: 12px; background: #111827; padding: 16px; border-radius: 8px; border: 1px solid #1f2937; }
-      label { display: block; font-size: 14px; color: #cbd5e1; }
-      input { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid #374151; background: #0b1020; color: #e5e7eb; }
+      label { display: block; font-size: 14px; color: #cbd5e1; margin-bottom: 4px; }
+      input { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid #374151; background: #0b1020; color: #e5e7eb; box-sizing: border-box; }
       button { padding: 10px 14px; border-radius: 6px; border: 1px solid #334155; background: #2563eb; color: white; cursor: pointer; font-weight: 600; }
       button:disabled { opacity: 0.6; cursor: not-allowed; }
-      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+      .vin-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; }
       .result { margin-top: 16px; padding: 12px; border-radius: 8px; border: 1px solid #1f2937; background: #0b1020; }
       .muted { color: #94a3b8; font-size: 13px; }
       a { color: #93c5fd; }
-      .logo { display: block; margin: 8px auto 20px; max-width: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
+      .logo { display: block; margin: 8px auto 8px; max-width: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
     </style>
   </head>
   <body>
@@ -59,7 +60,7 @@
       <form id="valueForm">
         <div>
           <label for="vin">VIN</label>
-          <div class="row" style="grid-template-columns: 1fr auto; align-items: end;">
+          <div class="vin-row">
             <input id="vin" name="vin" placeholder="Enter VIN" required />
             <button id="scanVin" type="button" title="Scan VIN using camera">Scan VIN</button>
           </div>
@@ -83,8 +84,13 @@
       </form>
       <div id="result" class="result" hidden>
         <div id="price" style="font-size: 40px; font-weight: 800; text-align: center;"></div>
-        <div id="progress" class="muted" style="white-space: pre-line; margin-top: 8px;"></div>
-        <div id="shots" style="margin-top:8px"></div>
+        <div id="details" style="margin-top: 12px;">
+          <button id="toggleDetails" type="button" style="background: #374151; border: 1px solid #4b5563; color: #d1d5db; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Show Details</button>
+          <div id="detailsContent" style="display: none; margin-top: 8px;">
+            <div id="progress" class="muted" style="white-space: pre-line;"></div>
+            <div id="shots" style="margin-top:8px"></div>
+          </div>
+        </div>
         <div id="error" style="color: #fca5a5"></div>
       </div>
     </div>
@@ -102,6 +108,8 @@
       const vinImage = document.getElementById('vinImage');
       const zipInput = document.getElementById('zip');
       const emailInput = document.getElementById('email');
+      const toggleDetails = document.getElementById('toggleDetails');
+      const detailsContent = document.getElementById('detailsContent');
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -111,6 +119,9 @@
         submit.disabled = true;
         submit.textContent = 'Working…';
         document.body.classList.add('working');
+        // Hide details and reset toggle button
+        detailsContent.style.display = 'none';
+        toggleDetails.textContent = 'Show Details';
         try {
           const payload = {
             vin: document.getElementById('vin').value.trim(),
@@ -152,6 +163,11 @@
             selectionsDiv.style.cssText = 'margin-top: 8px; padding: 8px; background: #1f2937; border-radius: 4px; font-size: 14px;';
             selectionsDiv.innerHTML = `<strong>Vehicle Options Selected:</strong><br>${data.selections.join('<br>')}`;
             progress.parentNode.insertBefore(selectionsDiv, progress.nextSibling);
+          }
+          
+          // Show toggle button if there are details to show
+          if (data.steps && data.steps.length > 0) {
+            toggleDetails.style.display = 'inline-block';
           }
           
           shots.innerHTML = '';
@@ -213,6 +229,17 @@
           reader.readAsDataURL(file);
         });
       }
+
+      // Toggle details visibility
+      toggleDetails?.addEventListener('click', () => {
+        if (detailsContent.style.display === 'none') {
+          detailsContent.style.display = 'block';
+          toggleDetails.textContent = 'Hide Details';
+        } else {
+          detailsContent.style.display = 'none';
+          toggleDetails.textContent = 'Show Details';
+        }
+      });
 
       // Prefill defaults from server environment
       (async () => {
