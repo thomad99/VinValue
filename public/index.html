@@ -116,7 +116,24 @@
           });
           const data = await res.json();
           result.hidden = false;
-          if (!res.ok) throw new Error(data.error || 'Failed');
+          
+          if (!res.ok) {
+            // Server returned an error with debug info
+            error.textContent = data.error || 'Failed';
+            if (data.steps) {
+              progress.textContent = data.steps.join('\n');
+            }
+            if (data.screenshots) {
+              shots.innerHTML = '';
+              const links = [];
+              if (data.screenshots.error) links.push(`<a href="${data.screenshots.error}" target="_blank">Error state</a>`);
+              if (data.screenshots.filled) links.push(`<a href="${data.screenshots.filled}" target="_blank">Filled form</a>`);
+              if (links.length) shots.innerHTML = 'Screenshots: ' + links.join(' · ');
+            }
+            return;
+          }
+          
+          // Success case
           price.textContent = data.valuation;
           progress.textContent = (data.steps || []).join('\n');
           shots.innerHTML = '';
@@ -128,18 +145,8 @@
           }
         } catch (err) {
           result.hidden = false;
-          error.textContent = (err && err.message) || 'Something went wrong';
-          // Show server-provided debug info if available
-          if (data && data.steps) {
-            progress.textContent = data.steps.join('\n');
-          }
-          if (data && data.screenshots) {
-            shots.innerHTML = '';
-            const links = [];
-            if (data.screenshots.error) links.push(`<a href="${data.screenshots.error}" target="_blank">Error state</a>`);
-            if (data.screenshots.filled) links.push(`<a href="${data.screenshots.filled}" target="_blank">Filled form</a>`);
-            if (links.length) shots.innerHTML = 'Screenshots: ' + links.join(' · ');
-          }
+          error.textContent = err.message || 'Network error - check console';
+          console.error('Request failed:', err);
         } finally {
           submit.disabled = false;
           submit.textContent = 'Get Valuation';
