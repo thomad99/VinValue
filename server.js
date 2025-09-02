@@ -68,38 +68,122 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
   const context = await browser.newContext();
   const page = await context.newPage();
   try {
-    await page.goto('https://www.webuyanycarusa.com/?r=1', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto('https://www.webuyanycarusa.com/?r=1', { waitUntil: 'domcontentloaded', timeout: 90000 });
 
     // Click VIN link
     const vinLink = page.locator('a', { hasText: 'VIN' });
     await vinLink.first().click();
 
-    // Enter VIN
-    await page.waitForSelector('input[name="vin"]', { timeout: 30000 });
-    await page.fill('input[name="vin"]', vin);
+    // Enter VIN (try several candidates)
+    const vinSelectors = [
+      'input[name="vin"]',
+      'input#vin',
+      'input[placeholder*="VIN" i]'
+    ];
+    let vinFilled = false;
+    for (const sel of vinSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.count()) {
+        await el.fill(vin);
+        vinFilled = true;
+        break;
+      }
+    }
+    if (!vinFilled) throw new Error('Could not find VIN input');
 
-    // Click Value My Car
-    const valueButton = page.locator('button, input[type="submit"]', { hasText: /Value My Car/i });
-    await valueButton.first().click();
+    // Click Value My Car (try several CTA variants)
+    const ctaCandidates = [
+      page.getByRole('button', { name: /Value My Car/i }),
+      page.locator('button:has-text("Value My Car")'),
+      page.locator('input[type="submit"][value*="Value" i]'),
+      page.locator('button:has-text("Continue")')
+    ];
+    let clickedCTA = false;
+    for (const cta of ctaCandidates) {
+      if (await cta.count()) {
+        await cta.first().click();
+        clickedCTA = true;
+        break;
+      }
+    }
+    if (!clickedCTA) throw new Error('Could not find Value My Car button');
 
-    // Enter mileage
-    await page.waitForSelector('input[name*="mileage" i], input[name*="odometer" i]', { timeout: 30000 });
-    await page.fill('input[name*="mileage" i], input[name*="odometer" i]', String(mileage));
+    // Wait for vehicle details page
+    await page.waitForLoadState('domcontentloaded', { timeout: 90000 });
+    await page.waitForURL(/valuation\/vehicledetails/i, { timeout: 90000 });
+
+    // Enter mileage (robust selector set with retries)
+    const mileageSelectors = [
+      'input[name*="mileage" i]',
+      'input[name*="odometer" i]',
+      'input[type="number"]',
+      'input[placeholder*="odometer" i]',
+      'input[placeholder*="mileage" i]'
+    ];
+    let mileageFilled = false;
+    for (const sel of mileageSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.count()) {
+        await el.scrollIntoViewIfNeeded();
+        await el.fill(String(mileage));
+        mileageFilled = true;
+        break;
+      }
+    }
+    if (!mileageFilled) {
+      // small wait and retry once
+      await page.waitForTimeout(2000);
+      for (const sel of mileageSelectors) {
+        const el = page.locator(sel).first();
+        if (await el.count()) {
+          await el.scrollIntoViewIfNeeded();
+          await el.fill(String(mileage));
+          mileageFilled = true;
+          break;
+        }
+      }
+    }
+    if (!mileageFilled) throw new Error('Could not find mileage/odometer input');
 
     // Zip code
-    await page.waitForSelector('input[name*="zip" i], input[name*="postal" i]', { timeout: 30000 });
-    await page.fill('input[name*="zip" i], input[name*="postal" i]', String(zip));
+    const zipSelectors = [
+      'input[name*="zip" i]',
+      'input[name*="postal" i]',
+      'input[placeholder*="zip" i]'
+    ];
+    for (const sel of zipSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.count()) {
+        await el.fill(String(zip));
+        break;
+      }
+    }
 
     // Email
-    await page.waitForSelector('input[type="email"], input[name*="email" i]', { timeout: 30000 });
-    await page.fill('input[type="email"], input[name*="email" i]', email);
+    const emailSelectors = [
+      'input[type="email"]',
+      'input[name*="email" i]',
+      'input[placeholder*="email" i]'
+    ];
+    for (const sel of emailSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.count()) {
+        await el.fill(email);
+        break;
+      }
+    }
 
     // Click See your valuation
-    const seeValBtn = page.locator('button, a', { hasText: /See your valuation/i });
-    await seeValBtn.first().click();
+    const seeValBtn = page.locator('button:has-text("See your valuation"), a:has-text("See your valuation")');
+    if (await seeValBtn.count()) {
+      await seeValBtn.first().click();
+    } else {
+      const continueBtn = page.getByRole('button', { name: /Continue|Next|Get value/i });
+      if (await continueBtn.count()) await continueBtn.first().click();
+    }
 
     // Wait for valuation result to appear
-    await page.waitForLoadState('networkidle', { timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 90000 });
 
     // Try to locate a price element
     const priceSelectors = [

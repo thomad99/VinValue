@@ -1,7 +1,6 @@
 Param(
   [string]$RepoUrl = "https://github.com/thomad99/VinValue.git",
   [string]$Branch = "main",
-  [int]$IntervalSeconds = 60,
   [switch]$SkipEmptyCommits
 )
 
@@ -34,45 +33,34 @@ if (git remote get-url origin 2>$null) {
   git remote add origin $RepoUrl
 }
 
-Write-Host "Auto-sync enabled. Pushing to $RepoUrl ($Branch) every $IntervalSeconds seconds." -ForegroundColor Cyan
+try {
+  git add -A | Out-Null
 
-while ($true) {
-  try {
-    git add -A | Out-Null
+  $hasHead = $true
+  git rev-parse --verify HEAD 2>$null | Out-Null
+  if ($LASTEXITCODE -ne 0) { $hasHead = $false }
 
-    $hasHead = $true
-    git rev-parse --verify HEAD 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0) { $hasHead = $false }
+  $status = git status --porcelain
+  $changedCount = if ([string]::IsNullOrWhiteSpace($status)) { 0 } else { ($status -split "`n").Count }
 
-    $status = git status --porcelain
-    $changedCount = if ([string]::IsNullOrWhiteSpace($status)) { 0 } else { ($status -split "`n").Count }
-
-    if (-not $hasHead) {
-      Write-Host "First push: committing initial files ($changedCount files)." -ForegroundColor Green
-      git commit -m "Initial commit" | Out-Null
-      git push -u origin $Branch | Out-Null
-      Write-Host "Upload complete." -ForegroundColor Green
-    } elseif ($SkipEmptyCommits -and $changedCount -eq 0) {
-      Write-Host ("No updates required.") -ForegroundColor Blue
+  if (-not $hasHead) {
+    Write-Host "First push: committing initial files ($changedCount files)." -ForegroundColor Green
+    git commit -m "Initial commit" | Out-Null
+    git push -u origin $Branch | Out-Null
+    Write-Host "Upload complete." -ForegroundColor Green
+  } elseif ($SkipEmptyCommits -and $changedCount -eq 0) {
+    Write-Host ("No updates required.") -ForegroundColor Blue
+  } else {
+    if ($changedCount -eq 0) {
+      Write-Host "No detected file changes; creating empty sync commit." -ForegroundColor Blue
     } else {
-      if ($changedCount -eq 0) {
-        Write-Host "No detected file changes; creating empty sync commit." -ForegroundColor Blue
-      } else {
-        Write-Host ("{0} files changed. Uploading..." -f $changedCount) -ForegroundColor Green
-      }
-      git commit -m "Sync" --allow-empty | Out-Null
-      git push -u origin $Branch | Out-Null
-      Write-Host "Upload complete." -ForegroundColor Green
+      Write-Host ("{0} files changed. Uploading..." -f $changedCount) -ForegroundColor Green
     }
-  } catch {
-    Write-Host ("Push failed: {0}" -f $_.Exception.Message) -ForegroundColor Red
+    git commit -m "Sync" --allow-empty | Out-Null
+    git push -u origin $Branch | Out-Null
+    Write-Host "Upload complete." -ForegroundColor Green
   }
-
-  for ($i = $IntervalSeconds; $i -gt 0; $i--) {
-    Write-Host ("Sleeping {0}s ... Press Ctrl+C to stop" -f $i) -ForegroundColor DarkCyan -NoNewline
-    Start-Sleep -Seconds 1
-    Write-Host "`r" -NoNewline
-  }
-  Write-Host ""
+} catch {
+  Write-Host ("Push failed: {0}" -f $_.Exception.Message) -ForegroundColor Red
 }
 
