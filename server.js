@@ -68,6 +68,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
   const context = await browser.newContext();
   const page = await context.newPage();
   const steps = [];
+  const selections = []; // Track all dropdown selections
   try {
     steps.push('Navigating to site');
     await page.goto('https://www.webuyanycarusa.com/?r=1', { waitUntil: 'domcontentloaded', timeout: 90000 });
@@ -134,7 +135,9 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
             if (value && value.trim() && text && !text.toLowerCase().includes('select')) {
               await select.selectOption(value);
               dropdownsFilled++;
-              steps.push(`Selected dropdown option: ${text.trim()}`);
+              const selectionText = text.trim();
+              steps.push(`Selected dropdown option: ${selectionText}`);
+              selections.push(selectionText); // Record the selection
               break;
             }
           }
@@ -303,7 +306,12 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       throw new Error('Could not find valuation on the page. The site may have changed.');
     }
 
-    return { valuation: valuationText, steps, screenshots: { filled: filledShot, result: resultShot } };
+    return { 
+      valuation: valuationText, 
+      steps, 
+      selections, // Include dropdown selections
+      screenshots: { filled: filledShot, result: resultShot } 
+    };
   } catch (err) {
     // Capture error screenshot and rethrow structured error
     let errorShot = null;
