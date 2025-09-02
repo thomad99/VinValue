@@ -12,7 +12,16 @@
         background-size: 400% 400%;
         animation: gradientShift 45s ease infinite;
       }
+      body.working {
+        animation: gradientShiftActive 6s ease-in-out infinite;
+        filter: saturate(1.1);
+      }
       @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+      @keyframes gradientShiftActive {
         0% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
@@ -92,6 +101,7 @@
         error.textContent = '';
         submit.disabled = true;
         submit.textContent = 'Working…';
+        document.body.classList.add('working');
         try {
           const payload = {
             vin: document.getElementById('vin').value.trim(),
@@ -119,20 +129,21 @@
         } catch (err) {
           result.hidden = false;
           error.textContent = (err && err.message) || 'Something went wrong';
-          // Try to show server-provided steps/screenshots if present
-          try {
-            const parsed = typeof err === 'object' ? err : null;
-            if (parsed && parsed.steps) progress.textContent = (parsed.steps || []).join('\n');
-            if (parsed && parsed.screenshots) {
-              shots.innerHTML = '';
-              const links = [];
-              if (parsed.screenshots.error) links.push(`<a href="${parsed.screenshots.error}" target="_blank">Error state</a>`);
-              if (links.length) shots.innerHTML = 'Screenshots: ' + links.join(' · ');
-            }
-          } catch (_) {}
+          // Show server-provided debug info if available
+          if (data && data.steps) {
+            progress.textContent = data.steps.join('\n');
+          }
+          if (data && data.screenshots) {
+            shots.innerHTML = '';
+            const links = [];
+            if (data.screenshots.error) links.push(`<a href="${data.screenshots.error}" target="_blank">Error state</a>`);
+            if (data.screenshots.filled) links.push(`<a href="${data.screenshots.filled}" target="_blank">Filled form</a>`);
+            if (links.length) shots.innerHTML = 'Screenshots: ' + links.join(' · ');
+          }
         } finally {
           submit.disabled = false;
           submit.textContent = 'Get Valuation';
+          document.body.classList.remove('working');
         }
       });
 
