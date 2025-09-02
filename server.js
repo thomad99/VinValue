@@ -108,78 +108,72 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     }
     if (!clickedCTA) throw new Error('Could not find Value My Car button');
 
-    // Wait for vehicle details page
+    // Wait for next page to render (URL may vary: vehicledetails or vehiclecondition)
     await page.waitForLoadState('domcontentloaded', { timeout: 90000 });
-    await page.waitForURL(/valuation\/vehicledetails/i, { timeout: 90000 });
 
-    // Enter mileage (robust selector set with retries)
-    const mileageSelectors = [
-      'input[name*="mileage" i]',
-      'input[name*="odometer" i]',
-      'input[type="number"]',
-      'input[placeholder*="odometer" i]',
-      'input[placeholder*="mileage" i]'
-    ];
+    // Enter mileage (Vehicle Condition page has placeholder "Enter Vehicle Mileage")
     let mileageFilled = false;
-    for (const sel of mileageSelectors) {
-      const el = page.locator(sel).first();
-      if (await el.count()) {
-        await el.scrollIntoViewIfNeeded();
-        await el.fill(String(mileage));
-        mileageFilled = true;
-        break;
-      }
-    }
+    try {
+      const mil = page.getByPlaceholder(/Enter\s+Vehicle\s+Mileage/i);
+      await mil.waitFor({ state: 'visible', timeout: 30000 });
+      await mil.fill(String(mileage));
+      mileageFilled = true;
+    } catch (_) {}
     if (!mileageFilled) {
-      // small wait and retry once
-      await page.waitForTimeout(2000);
+      const mileageSelectors = [
+        'input[name*="mileage" i]','input[name*="odometer" i]','input[type="number"]','input[placeholder*="odometer" i]','input[placeholder*="mileage" i]'
+      ];
       for (const sel of mileageSelectors) {
         const el = page.locator(sel).first();
-        if (await el.count()) {
-          await el.scrollIntoViewIfNeeded();
-          await el.fill(String(mileage));
-          mileageFilled = true;
-          break;
-        }
+        if (await el.count()) { await el.fill(String(mileage)); mileageFilled = true; break; }
       }
     }
     if (!mileageFilled) throw new Error('Could not find mileage/odometer input');
 
-    // Zip code
-    const zipSelectors = [
-      'input[name*="zip" i]',
-      'input[name*="postal" i]',
-      'input[placeholder*="zip" i]'
-    ];
-    for (const sel of zipSelectors) {
-      const el = page.locator(sel).first();
-      if (await el.count()) {
-        await el.fill(String(zip));
-        break;
+    // Zip code (placeholder "Enter ZIP Code")
+    let zipFilled = false;
+    try {
+      const zipEl = page.getByPlaceholder(/Enter\s+ZIP\s+Code/i);
+      await zipEl.waitFor({ state: 'visible', timeout: 20000 });
+      await zipEl.fill(String(zip));
+      zipFilled = true;
+    } catch (_) {}
+    if (!zipFilled) {
+      const zipSelectors = ['input[name*="zip" i]','input[name*="postal" i]','input[placeholder*="zip" i]'];
+      for (const sel of zipSelectors) {
+        const el = page.locator(sel).first();
+        if (await el.count()) { await el.fill(String(zip)); zipFilled = true; break; }
       }
     }
 
-    // Email
-    const emailSelectors = [
-      'input[type="email"]',
-      'input[name*="email" i]',
-      'input[placeholder*="email" i]'
-    ];
-    for (const sel of emailSelectors) {
-      const el = page.locator(sel).first();
-      if (await el.count()) {
-        await el.fill(email);
-        break;
+    // Email (placeholder "Enter Email Address")
+    let emailFilled = false;
+    try {
+      const emailEl = page.getByPlaceholder(/Enter\s+Email\s+Address/i);
+      await emailEl.waitFor({ state: 'visible', timeout: 20000 });
+      await emailEl.fill(email);
+      emailFilled = true;
+    } catch (_) {}
+    if (!emailFilled) {
+      const emailSelectors = ['input[type="email"]','input[name*="email" i]','input[placeholder*="email" i]'];
+      for (const sel of emailSelectors) {
+        const el = page.locator(sel).first();
+        if (await el.count()) { await el.fill(email); emailFilled = true; break; }
       }
     }
 
     // Click See your valuation
-    const seeValBtn = page.locator('button:has-text("See your valuation"), a:has-text("See your valuation")');
+    // Click See Your Valuation
+    const seeValBtn = page.getByRole('button', { name: /See\s+Your\s+Valuation/i });
     if (await seeValBtn.count()) {
       await seeValBtn.first().click();
     } else {
-      const continueBtn = page.getByRole('button', { name: /Continue|Next|Get value/i });
-      if (await continueBtn.count()) await continueBtn.first().click();
+      const altBtn = page.locator('button:has-text("See Your Valuation"), a:has-text("See Your Valuation")');
+      if (await altBtn.count()) await altBtn.first().click();
+      else {
+        const continueBtn = page.getByRole('button', { name: /Continue|Next|Get value/i });
+        if (await continueBtn.count()) await continueBtn.first().click();
+      }
     }
 
     // Wait for valuation result to appear
