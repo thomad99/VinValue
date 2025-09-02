@@ -5,7 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>VIN Value</title>
     <style>
-      body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 24px; background: #0f172a; color: #e2e8f0; }
+      body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 24px; color: #e2e8f0; }
+      /* Calming animated gradient background */
+      body {
+        background: linear-gradient(120deg, #0f172a, #0b1020, #0e1b4d);
+        background-size: 400% 400%;
+        animation: gradientShift 45s ease infinite;
+      }
+      @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+      /* Respect reduced motion */
+      @media (prefers-reduced-motion: reduce) {
+        body { animation: none; }
+      }
       .container { max-width: 680px; margin: 0 auto; }
       h1 { margin: 0 0 16px; font-size: 28px; }
       form { display: grid; gap: 12px; background: #111827; padding: 16px; border-radius: 8px; border: 1px solid #1f2937; }
@@ -17,10 +32,12 @@
       .result { margin-top: 16px; padding: 12px; border-radius: 8px; border: 1px solid #1f2937; background: #0b1020; }
       .muted { color: #94a3b8; font-size: 13px; }
       a { color: #93c5fd; }
+      .logo { display: block; margin: 8px auto 20px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
     </style>
   </head>
   <body>
     <div class="container">
+      <img src="/lab007-trans.png" alt="Lab007" class="logo" onerror="this.style.display='none'" />
       <h1>VIN Value</h1>
       <p class="muted">Fetch valuation from <a href="https://www.webuyanycarusa.com/?r=1" target="_blank" rel="noreferrer">webuyanycarusa.com</a>. Your inputs are sent to your local server only.</p>
       <form id="valueForm">
