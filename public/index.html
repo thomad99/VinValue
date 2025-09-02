@@ -129,6 +129,13 @@
             zip: document.getElementById('zip').value.trim(),
             email: document.getElementById('email').value.trim(),
           };
+          
+          // Add detected car details if no VIN but we have make/model/year
+          if (!payload.vin && window.detectedCarDetails) {
+            payload.make = window.detectedCarDetails.make;
+            payload.model = window.detectedCarDetails.model;
+            payload.year = window.detectedCarDetails.year;
+          }
           const res = await fetch('/api/value', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -241,14 +248,22 @@
             if (yearMatches.length > 0) details.push(`Year: ${yearMatches[0]}`);
             if (mileageMatches.length > 0) details.push(`Mileage: ${mileageMatches[0]}`);
             
-            const confirmed = confirm(`No VIN found, but detected:\n${details.join('\n')}\n\nUse these details instead of VIN?`);
+            const confirmed = confirm(`No VIN found, but detected:\n${details.join('\n')}\n\nUse these details to get valuation?`);
             if (confirmed) {
-              // Clear VIN and let user fill manually or we could auto-fill some fields
+              // Clear VIN and auto-fill detected details
               vinInput.value = '';
               if (mileageMatches.length > 0) {
                 document.getElementById('mileage').value = mileageMatches[0];
               }
-              alert('Please manually enter the VIN or use the detected details. The mileage has been filled automatically.');
+              
+              // Store detected details for submission
+              window.detectedCarDetails = {
+                make: makeModel.split(' ')[0] || '',
+                model: makeModel.split(' ').slice(1).join(' ') || '',
+                year: yearMatches[0] || ''
+              };
+              
+              alert('Car details detected and stored. Click "Get Valuation" to proceed with Make & Model lookup.');
             } else {
               alert('No VIN detected. Try a clearer, closer photo of the VIN label or car listing.');
             }

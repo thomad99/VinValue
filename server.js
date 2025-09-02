@@ -63,7 +63,7 @@ async function launchChromium() {
   }
 }
 
-async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT_EMAIL }) {
+async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT_EMAIL, make, model, year }) {
   const browser = await launchChromium();
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -73,27 +73,67 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     steps.push('Navigating to site');
     await page.goto('https://www.webuyanycarusa.com/?r=1', { waitUntil: 'domcontentloaded', timeout: 90000 });
 
-    // Click VIN link
-    const vinLink = page.locator('a', { hasText: 'VIN' });
-    await vinLink.first().click();
+    // Determine which path to use: VIN or Make & Model
+    if (vin && vin.trim()) {
+      // Use VIN path
+      steps.push(`Using VIN path: VIN=${vin}, Mileage=${mileage}, Zip=${zip}, Email=${email}`);
+      
+      // Click VIN link
+      const vinLink = page.locator('a', { hasText: 'VIN' });
+      await vinLink.first().click();
 
-    steps.push(`Sending info to web: VIN=${vin}, Mileage=${mileage}, Zip=${zip}, Email=${email}`);
-    // Enter VIN (try several candidates)
-    const vinSelectors = [
-      'input[name="vin"]',
-      'input#vin',
-      'input[placeholder*="VIN" i]'
-    ];
-    let vinFilled = false;
-    for (const sel of vinSelectors) {
-      const el = page.locator(sel).first();
-      if (await el.count()) {
-        await el.fill(vin);
-        vinFilled = true;
-        break;
+      // Enter VIN (try several candidates)
+      const vinSelectors = [
+        'input[name="vin"]',
+        'input#vin',
+        'input[placeholder*="VIN" i]'
+      ];
+      let vinFilled = false;
+      for (const sel of vinSelectors) {
+        const el = page.locator(sel).first();
+        if (await el.count()) {
+          await el.fill(vin);
+          vinFilled = true;
+          break;
+        }
       }
+      if (!vinFilled) throw new Error('Could not find VIN input');
+    } else if (make && model && year) {
+      // Use Make & Model path
+      steps.push(`Using Make & Model path: ${year} ${make} ${model}, Mileage=${mileage}, Zip=${zip}, Email=${email}`);
+      
+      // Make & Model tab should be active by default, but let's ensure it
+      const makeModelTab = page.locator('a, button', { hasText: /Make.*Model/i });
+      if (await makeModelTab.count()) {
+        await makeModelTab.first().click();
+      }
+
+      // Select Year
+      const yearSelect = page.locator('select').first();
+      if (await yearSelect.count()) {
+        await yearSelect.selectOption({ label: year });
+        steps.push(`Selected year: ${year}`);
+        selections.push(`Year: ${year}`);
+      }
+
+      // Select Make
+      const makeSelect = page.locator('select').nth(1);
+      if (await makeSelect.count()) {
+        await makeSelect.selectOption({ label: make });
+        steps.push(`Selected make: ${make}`);
+        selections.push(`Make: ${make}`);
+      }
+
+      // Select Model
+      const modelSelect = page.locator('select').nth(2);
+      if (await modelSelect.count()) {
+        await modelSelect.selectOption({ label: model });
+        steps.push(`Selected model: ${model}`);
+        selections.push(`Model: ${model}`);
+      }
+    } else {
+      throw new Error('Either VIN or Make/Model/Year must be provided');
     }
-    if (!vinFilled) throw new Error('Could not find VIN input');
 
     steps.push('Clicking Value My Car');
     // Click Value My Car (try several CTA variants)
@@ -333,12 +373,12 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
 }
 
 app.post('/api/value', async (req, res) => {
-  const { vin, mileage, zip, email } = req.body || {};
-  if (!vin || !mileage) {
-    return res.status(400).json({ error: 'vin and mileage are required' });
+  const { vin, mileage, zip, email, make, model, year } = req.body || {};
+  if ((!vin && (!make || !model || !year)) || !mileage) {
+    return res.status(400).json({ error: 'Either VIN or (make, model, year) and mileage are required' });
   }
   try {
-    const result = await fetchValuation({ vin, mileage, zip, email });
+    const result = await fetchValuation({ vin, mileage, zip, email, make, model, year });
     res.json(result);
   } catch (err) {
     if (err && err.isKnown) {
