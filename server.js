@@ -115,6 +115,67 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     // Wait for next page to render (URL may vary: vehicledetails or vehiclecondition)
     await page.waitForLoadState('domcontentloaded', { timeout: 90000 });
 
+    // Check if we're on Vehicle Details page (step 2) and need to select body type
+    const currentUrl = page.url();
+    if (currentUrl.includes('vehicledetails') || currentUrl.includes('vehicle-details')) {
+      steps.push('On Vehicle Details page - selecting body type');
+      
+      // Look for body type dropdown and select first option
+      const bodyTypeSelectors = [
+        'select[name*="body" i]',
+        'select[name*="type" i]',
+        'select[aria-label*="body" i]',
+        '.dropdown select',
+        'select'
+      ];
+      
+      let bodyTypeSelected = false;
+      for (const sel of bodyTypeSelectors) {
+        const select = page.locator(sel).first();
+        if (await select.count()) {
+          const options = await select.locator('option').all();
+          if (options.length > 1) {
+            // Select the first non-empty option (skip "Select..." placeholder)
+            for (let i = 1; i < options.length; i++) {
+              const value = await options[i].getAttribute('value');
+              if (value && value.trim()) {
+                await select.selectOption(value);
+                bodyTypeSelected = true;
+                steps.push(`Selected body type: ${value}`);
+                break;
+              }
+            }
+          }
+          if (bodyTypeSelected) break;
+        }
+      }
+      
+      // Click Continue to proceed to Vehicle Condition page
+      const continueSelectors = [
+        'button:has-text("Continue to Step 3")',
+        'button:has-text("Continue")',
+        'button[type="submit"]',
+        'input[type="submit"]'
+      ];
+      
+      let continued = false;
+      for (const sel of continueSelectors) {
+        const btn = page.locator(sel).first();
+        if (await btn.count()) {
+          await btn.click();
+          continued = true;
+          steps.push('Clicked Continue to proceed to Vehicle Condition');
+          break;
+        }
+      }
+      
+      if (continued) {
+        // Wait for Vehicle Condition page to load
+        await page.waitForLoadState('domcontentloaded', { timeout: 90000 });
+        await page.waitForTimeout(2000); // Give it a moment to render
+      }
+    }
+
     // Enter mileage (Vehicle Condition page has placeholder "Enter Vehicle Mileage")
     steps.push('Filling Vehicle Condition: mileage');
     let mileageFilled = false;

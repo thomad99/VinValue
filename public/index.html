@@ -13,8 +13,10 @@
         animation: gradientShift 45s ease infinite;
       }
       body.working {
-        animation: gradientShiftActive 6s ease-in-out infinite;
-        filter: saturate(1.1);
+        background: linear-gradient(120deg, #1e3a8a, #7c3aed, #dc2626, #059669);
+        background-size: 400% 400%;
+        animation: gradientShiftActive 2s ease-in-out infinite;
+        filter: saturate(1.3) brightness(1.1);
       }
       @keyframes gradientShift {
         0% { background-position: 0% 50%; }
@@ -23,7 +25,9 @@
       }
       @keyframes gradientShiftActive {
         0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
+        25% { background-position: 100% 0%; }
+        50% { background-position: 100% 100%; }
+        75% { background-position: 0% 100%; }
         100% { background-position: 0% 50%; }
       }
       /* Respect reduced motion */
