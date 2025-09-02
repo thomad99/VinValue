@@ -190,6 +190,8 @@
 
       // VIN scan logic
       const VIN_REGEX = /\b([A-HJ-NPR-Z\d]{17})\b/g; // excludes I, O, Q
+      const YEAR_REGEX = /\b(19|20)\d{2}\b/g;
+      const MILEAGE_REGEX = /\b(\d{1,3}(?:,\d{3})*)\s*(?:miles?|mi\.?)\b/gi;
 
       scanVinBtn?.addEventListener('click', () => {
         vinImage.click();
@@ -202,18 +204,59 @@
           scanVinBtn.disabled = true;
           scanVinBtn.textContent = 'Scanning…';
           const dataUrl = await fileToDataUrl(file);
-          const { data } = await Tesseract.recognize(dataUrl, 'eng', {
-            tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
-          });
+          const { data } = await Tesseract.recognize(dataUrl, 'eng');
           const text = (data && data.text ? data.text : '').toUpperCase();
-          const matches = [...text.matchAll(VIN_REGEX)].map(m => m[1]);
-          if (matches.length > 0) {
-            vinInput.value = matches[0];
+          
+          // First try to find VIN
+          const vinMatches = [...text.matchAll(VIN_REGEX)].map(m => m[1]);
+          if (vinMatches.length > 0) {
+            vinInput.value = vinMatches[0];
+            scanVinBtn.textContent = 'Scan VIN';
+            return;
+          }
+          
+          // If no VIN, try to extract car details
+          const yearMatches = [...text.matchAll(YEAR_REGEX)].map(m => m[0]);
+          const mileageMatches = [...text.matchAll(MILEAGE_REGEX)].map(m => m[1].replace(/,/g, ''));
+          
+          // Look for make/model patterns
+          const makeModelPatterns = [
+            /(FORD|CHEVROLET|CHEVY|TOYOTA|HONDA|BMW|MERCEDES|AUDI|NISSAN|HYUNDAI|KIA|MAZDA|SUBARU|VOLKSWAGEN|VW|LEXUS|ACURA|INFINITI|CADILLAC|LINCOLN|BUICK|CHRYSLER|DODGE|JEEP|RAM|GMC|VOLVO|SAAB|JAGUAR|LAND ROVER|PORSCHE|FERRARI|LAMBORGHINI|MASERATI|BENTLEY|ROLLS ROYCE|ASTON MARTIN|MCLAREN|ALFA ROMEO|GENESIS|RIVIAN|LUCID|TESLA)\s+([A-Z][A-Z0-9\s]+)/gi,
+            /(MUSTANG|CAMARO|CORVETTE|SILVERADO|F-150|CIVIC|ACCORD|CAMRY|COROLLA|PRIUS|3 SERIES|5 SERIES|X3|X5|C-CLASS|E-CLASS|S-CLASS|A4|A6|Q5|Q7|ALTIMA|SENTRA|ROGUE|PATHFINDER|SONATA|ELANTRA|TUCSON|SANTA FE|CX-5|CX-9|OUTBACK|FORESTER|GOLF|JETTA|PASSAT|ATLAS|IS|ES|GS|LS|RX|GX|LX|TL|TSX|RL|MDX|RDX|Q50|Q60|Q70|QX50|QX60|QX80|CTS|ATS|XTS|ESCALADE|YUKON|SIERRA|SILVERADO|MKC|MKX|MKZ|MKS|MKT|NAUTILUS|AVIATOR|CORS AIR|ENCLAVE|LACROSSE|REGAL|VERANO|CASCADA|300|CHARGER|CHALLENGER|DURANGO|GRAND CHEROKEE|WRANGLER|COMPASS|RENEGADE|GLADIATOR|WRANGLER|GRAND WAGONEER|SILVERADO|SIERRA|YUKON|TAHOE|SUBURBAN|ESCALADE|XT4|XT5|XT6|CT4|CT5|CT6|XTS|ATS|CTS|S60|S90|XC40|XC60|XC90|V60|V90|MODEL S|MODEL 3|MODEL X|MODEL Y|CYBERTRUCK)/gi
+          ];
+          
+          let makeModel = '';
+          for (const pattern of makeModelPatterns) {
+            const matches = [...text.matchAll(pattern)];
+            if (matches.length > 0) {
+              makeModel = matches[0][0].trim();
+              break;
+            }
+          }
+          
+          // If we found car details, ask user to confirm
+          if (yearMatches.length > 0 || mileageMatches.length > 0 || makeModel) {
+            const details = [];
+            if (makeModel) details.push(`Make/Model: ${makeModel}`);
+            if (yearMatches.length > 0) details.push(`Year: ${yearMatches[0]}`);
+            if (mileageMatches.length > 0) details.push(`Mileage: ${mileageMatches[0]}`);
+            
+            const confirmed = confirm(`No VIN found, but detected:\n${details.join('\n')}\n\nUse these details instead of VIN?`);
+            if (confirmed) {
+              // Clear VIN and let user fill manually or we could auto-fill some fields
+              vinInput.value = '';
+              if (mileageMatches.length > 0) {
+                document.getElementById('mileage').value = mileageMatches[0];
+              }
+              alert('Please manually enter the VIN or use the detected details. The mileage has been filled automatically.');
+            } else {
+              alert('No VIN detected. Try a clearer, closer photo of the VIN label or car listing.');
+            }
           } else {
-            alert('No VIN detected. Try a clearer, closer photo of the VIN label.');
+            alert('No VIN or car details detected. Try a clearer photo of the VIN label or car listing.');
           }
         } catch (e) {
-          alert('VIN scan failed: ' + (e && e.message ? e.message : 'unknown error'));
+          alert('Scan failed: ' + (e && e.message ? e.message : 'unknown error'));
         } finally {
           scanVinBtn.disabled = false;
           scanVinBtn.textContent = 'Scan VIN';
