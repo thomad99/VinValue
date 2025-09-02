@@ -14,24 +14,57 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DEFAULT_EMAIL = process.env.WEBUYEMAIL || 'Thomad99@gmail.com';
 const DEFAULT_ZIP = process.env.WEBUYZIPCODE || '34238';
+const { execFile } = require('child_process');
+const fs = require('fs');
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT_EMAIL }) {
-  const browser = await chromium.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-zygote',
-      '--single-process'
-    ]
+async function ensureChromiumInstalled() {
+  return new Promise((resolve) => {
+    // Attempt a quick existence check on the browsers cache folder inside node_modules
+    try {
+      const candidate = path.join(__dirname, 'node_modules', 'playwright-core', '.local-browsers');
+      if (fs.existsSync(candidate)) return resolve();
+    } catch (_) {}
+    execFile('npx', ['playwright', 'install', 'chromium', '--force'], { env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: '0' } }, () => resolve());
   });
+}
+
+async function launchChromium() {
+  try {
+    return await chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-zygote',
+        '--single-process'
+      ]
+    });
+  } catch (err) {
+    // If launch fails due to missing browser, try installing once and retry
+    await ensureChromiumInstalled();
+    return await chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-zygote',
+        '--single-process'
+      ]
+    });
+  }
+}
+
+async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT_EMAIL }) {
+  const browser = await launchChromium();
   const context = await browser.newContext();
   const page = await context.newPage();
   try {
