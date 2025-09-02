@@ -1,12 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { chromium } = require('playwright');
 
 // Ensure Playwright uses browsers shipped in node_modules on Render
 if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
 }
+
+// Import Playwright AFTER configuring env so it picks up the correct browser path
+const { chromium } = require('playwright');
 
 const app = express();
 const PORT = process.env.PORT || 3000;

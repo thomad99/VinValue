@@ -38,33 +38,41 @@ Write-Host "Auto-sync enabled. Pushing to $RepoUrl ($Branch) every $IntervalSeco
 
 while ($true) {
   try {
-    git add -A
+    git add -A | Out-Null
 
     $hasHead = $true
     git rev-parse --verify HEAD 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) { $hasHead = $false }
 
-    $changes = git status --porcelain
-    if (-not $hasHead) {
-      git commit -m "Initial commit"
-    } elseif ($SkipEmptyCommits -and [string]::IsNullOrWhiteSpace($changes)) {
-      # Skip commit
-    } else {
-      $msg = if ([string]::IsNullOrWhiteSpace($changes)) { "Sync (no changes)" } else { "Sync" }
-      git commit -m $msg --allow-empty | Out-Null
-    }
+    $status = git status --porcelain
+    $changedCount = if ([string]::IsNullOrWhiteSpace($status)) { 0 } else { ($status -split "`n").Count }
 
-    git push -u origin $Branch
-    Write-Host ("[{0}] Pushed to {1} {2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $RepoUrl, $Branch) -ForegroundColor Green
+    if (-not $hasHead) {
+      Write-Host "First push: committing initial files ($changedCount files)." -ForegroundColor Green
+      git commit -m "Initial commit" | Out-Null
+      git push -u origin $Branch | Out-Null
+      Write-Host "Upload complete." -ForegroundColor Green
+    } elseif ($SkipEmptyCommits -and $changedCount -eq 0) {
+      Write-Host ("No updates required.") -ForegroundColor Blue
+    } else {
+      if ($changedCount -eq 0) {
+        Write-Host "No detected file changes; creating empty sync commit." -ForegroundColor Blue
+      } else {
+        Write-Host ("{0} files changed. Uploading..." -f $changedCount) -ForegroundColor Green
+      }
+      git commit -m "Sync" --allow-empty | Out-Null
+      git push -u origin $Branch | Out-Null
+      Write-Host "Upload complete." -ForegroundColor Green
+    }
   } catch {
-    Write-Warning ("Push failed: {0}" -f $_.Exception.Message)
+    Write-Host ("Push failed: {0}" -f $_.Exception.Message) -ForegroundColor Red
   }
 
   for ($i = $IntervalSeconds; $i -gt 0; $i--) {
-    Write-Host ("Sleeping {0}s ... Press Ctrl+C to stop" -f $i) -NoNewline
+    Write-Host ("Sleeping {0}s ... Press Ctrl+C to stop" -f $i) -ForegroundColor DarkCyan -NoNewline
     Start-Sleep -Seconds 1
     Write-Host "`r" -NoNewline
   }
-  Write-Host "" # move to new line after countdown
+  Write-Host ""
 }
 
