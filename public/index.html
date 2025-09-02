@@ -32,12 +32,12 @@
       .result { margin-top: 16px; padding: 12px; border-radius: 8px; border: 1px solid #1f2937; background: #0b1020; }
       .muted { color: #94a3b8; font-size: 13px; }
       a { color: #93c5fd; }
-      .logo { display: block; margin: 8px auto 20px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
+      .logo { display: block; margin: 8px auto 20px; max-width: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
     </style>
   </head>
   <body>
     <div class="container">
-      <img src="lab007-trans.png" alt="Lab007" class="logo" />
+      <img src="lab007-trans.PNG" alt="Lab007" class="logo" />
       <form id="valueForm">
         <div>
           <label for="vin">VIN</label>
@@ -64,7 +64,7 @@
         <button id="submit" type="submit">Get Valuation</button>
       </form>
       <div id="result" class="result" hidden>
-        <div id="price" style="font-size: 20px; font-weight: 700;"></div>
+        <div id="price" style="font-size: 40px; font-weight: 800;"></div>
         <div id="progress" class="muted" style="white-space: pre-line; margin-top: 8px;"></div>
         <div id="shots" style="margin-top:8px"></div>
         <div id="error" style="color: #fca5a5"></div>
@@ -118,7 +118,18 @@
           }
         } catch (err) {
           result.hidden = false;
-          error.textContent = err.message || 'Something went wrong';
+          error.textContent = (err && err.message) || 'Something went wrong';
+          // Try to show server-provided steps/screenshots if present
+          try {
+            const parsed = typeof err === 'object' ? err : null;
+            if (parsed && parsed.steps) progress.textContent = (parsed.steps || []).join('\n');
+            if (parsed && parsed.screenshots) {
+              shots.innerHTML = '';
+              const links = [];
+              if (parsed.screenshots.error) links.push(`<a href="${parsed.screenshots.error}" target="_blank">Error state</a>`);
+              if (links.length) shots.innerHTML = 'Screenshots: ' + links.join(' · ');
+            }
+          } catch (_) {}
         } finally {
           submit.disabled = false;
           submit.textContent = 'Get Valuation';

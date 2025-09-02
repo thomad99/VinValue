@@ -126,7 +126,13 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     } catch (_) {}
     if (!mileageFilled) {
       const mileageSelectors = [
-        'input[name*="mileage" i]','input[name*="odometer" i]','input[type="number"]','input[placeholder*="odometer" i]','input[placeholder*="mileage" i]'
+        'input[name*="mileage" i]',
+        'input[name*="odometer" i]',
+        'input[type="number"]',
+        'input[placeholder*="odometer" i]',
+        'input[placeholder*="mileage" i]',
+        'input[aria-label*="mileage" i]',
+        '#mileage'
       ];
       for (const sel of mileageSelectors) {
         const el = page.locator(sel).first();
@@ -242,6 +248,20 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     }
 
     return { valuation: valuationText, steps, screenshots: { filled: filledShot, result: resultShot } };
+  } catch (err) {
+    // Capture error screenshot and rethrow structured error
+    let errorShot = null;
+    try {
+      const shotsDir = path.join(__dirname, 'public', 'shots');
+      if (!fs.existsSync(shotsDir)) fs.mkdirSync(shotsDir, { recursive: true });
+      const name = `error-${Date.now()}.png`;
+      const filePath = path.join(shotsDir, name);
+      await page.screenshot({ path: filePath, fullPage: true });
+      errorShot = `/shots/${name}`;
+      steps.push(`Captured error screenshot: ${errorShot}`);
+    } catch (_) {}
+    const errorPayload = { isKnown: true, message: err && err.message ? err.message : 'Automation failed', steps, screenshots: { error: errorShot } };
+    throw errorPayload;
   } finally {
     await context.close();
     await browser.close();
@@ -257,7 +277,11 @@ app.post('/api/value', async (req, res) => {
     const result = await fetchValuation({ vin, mileage, zip, email });
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Failed to fetch valuation' });
+    if (err && err.isKnown) {
+      res.status(500).json({ error: err.message || 'Failed to fetch valuation', steps: err.steps || [], screenshots: err.screenshots || {} });
+    } else {
+      res.status(500).json({ error: 'Failed to fetch valuation' });
+    }
   }
 });
 
