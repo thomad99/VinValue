@@ -5,13 +5,15 @@ const { chromium } = require('playwright');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DEFAULT_EMAIL = process.env.WEBUYEMAIL || 'Thomad99@gmail.com';
+const DEFAULT_ZIP = process.env.WEBUYZIPCODE || '34238';
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-async function fetchValuation({ vin, mileage, zip = '34238', email = 'Thomad99@gmail.com' }) {
+async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT_EMAIL }) {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();

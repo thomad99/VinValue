@@ -4,13 +4,17 @@ services:
     env: node
     plan: free
     region: oregon
-    buildCommand: npm install
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
         value: 18
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/render/project/.playwright
+      - key: WEBUYEMAIL
+        sync: false
+      - key: WEBUYZIPCODE
+        sync: false
     disk:
       name: pw-browsers
       mountPath: /opt/render/project/.playwright

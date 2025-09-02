@@ -20,7 +20,11 @@ This will also install the Chromium browser for Playwright.
 npm start
 ```
 
-Open `http://localhost:3000` and enter VIN and mileage. Optional: zip (defaults to `34238`) and email (defaults to `Thomad99@gmail.com`).
+Open `http://localhost:3000` and enter VIN and mileage.
+
+Optional fields:
+- Zip: defaults to `WEBUYZIPCODE` env var (fallback `34238`)
+- Email: defaults to `WEBUYEMAIL` env var (fallback `Thomad99@gmail.com`)
 
 ## Notes
 

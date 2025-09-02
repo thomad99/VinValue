@@ -26,7 +26,11 @@
       <form id="valueForm">
         <div>
           <label for="vin">VIN</label>
-          <input id="vin" name="vin" placeholder="Enter VIN" required />
+          <div class="row" style="grid-template-columns: 1fr auto; align-items: end;">
+            <input id="vin" name="vin" placeholder="Enter VIN" required />
+            <button id="scanVin" type="button" title="Scan VIN using camera">Scan VIN</button>
+          </div>
+          <input id="vinImage" type="file" accept="image/*" capture="environment" style="display:none" />
         </div>
         <div class="row">
           <div>
@@ -35,12 +39,12 @@
           </div>
           <div>
             <label for="zip">Zip Code</label>
-            <input id="zip" name="zip" placeholder="34238" value="34238" />
+            <input id="zip" name="zip" placeholder="defaults to server env WEBUYZIPCODE" />
           </div>
         </div>
         <div>
           <label for="email">Email</label>
-          <input id="email" name="email" type="email" placeholder="name@example.com" value="Thomad99@gmail.com" />
+          <input id="email" name="email" type="email" placeholder="defaults to server env WEBUYEMAIL" />
         </div>
         <button id="submit" type="submit">Get Valuation</button>
       </form>
@@ -49,12 +53,16 @@
         <div id="error" style="color: #fca5a5"></div>
       </div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <script>
       const form = document.getElementById('valueForm');
       const result = document.getElementById('result');
       const price = document.getElementById('price');
       const error = document.getElementById('error');
       const submit = document.getElementById('submit');
+      const scanVinBtn = document.getElementById('scanVin');
+      const vinInput = document.getElementById('vin');
+      const vinImage = document.getElementById('vinImage');
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -87,6 +95,48 @@
           submit.textContent = 'Get Valuation';
         }
       });
+
+      // VIN scan logic
+      const VIN_REGEX = /\b([A-HJ-NPR-Z\d]{17})\b/g; // excludes I, O, Q
+
+      scanVinBtn?.addEventListener('click', () => {
+        vinImage.click();
+      });
+
+      vinImage?.addEventListener('change', async () => {
+        if (!vinImage.files || vinImage.files.length === 0) return;
+        const file = vinImage.files[0];
+        try {
+          scanVinBtn.disabled = true;
+          scanVinBtn.textContent = 'Scanning…';
+          const dataUrl = await fileToDataUrl(file);
+          const { data } = await Tesseract.recognize(dataUrl, 'eng', {
+            tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
+          });
+          const text = (data && data.text ? data.text : '').toUpperCase();
+          const matches = [...text.matchAll(VIN_REGEX)].map(m => m[1]);
+          if (matches.length > 0) {
+            vinInput.value = matches[0];
+          } else {
+            alert('No VIN detected. Try a clearer, closer photo of the VIN label.');
+          }
+        } catch (e) {
+          alert('VIN scan failed: ' + (e && e.message ? e.message : 'unknown error'));
+        } finally {
+          scanVinBtn.disabled = false;
+          scanVinBtn.textContent = 'Scan VIN';
+          vinImage.value = '';
+        }
+      });
+
+      function fileToDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
     </script>
   </body>
   </html>
