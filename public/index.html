@@ -143,11 +143,37 @@
             payload.model = window.detectedCarDetails.model;
             payload.year = window.detectedCarDetails.year;
           }
+          // Show progress updates
+          const progressSteps = [
+            'Starting valuation process...',
+            'Navigating to website...',
+            payload.vin ? 'Entering VIN number...' : 'Using Make & Model lookup...',
+            payload.vin ? 'Waiting for page load...' : 'Selecting year...',
+            payload.vin ? 'Entering mileage...' : 'Selecting make...',
+            payload.vin ? 'Entering ZIP code...' : 'Selecting model...',
+            payload.vin ? 'Entering email address...' : 'Entering mileage...',
+            payload.vin ? 'Clicking Get Valuation...' : 'Entering ZIP code...',
+            payload.vin ? 'Waiting for valuation result...' : 'Entering email address...',
+            'Clicking Get Valuation...',
+            'Waiting for valuation result...'
+          ];
+          
+          let stepIndex = 0;
+          const progressInterval = setInterval(() => {
+            if (stepIndex < progressSteps.length) {
+              progress.textContent = progressSteps[stepIndex];
+              stepIndex++;
+            }
+          }, 2000);
+          
           const res = await fetch('/api/value', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
+          
+          clearInterval(progressInterval);
+          progress.textContent = 'Processing valuation result...';
           const data = await res.json();
           result.hidden = false;
           

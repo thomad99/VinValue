@@ -66,7 +66,7 @@ async function launchChromium() {
   }
 }
 
-async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT_EMAIL, make, model, year }) {
+async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT_EMAIL, make, model, year }, progressCallback = null) {
   const browser = await launchChromium();
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -74,18 +74,21 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
   const selections = []; // Track all dropdown selections
   try {
     steps.push('Navigating to site');
+    if (progressCallback) progressCallback('Navigating to website...');
     await page.goto('https://www.webuyanycarusa.com/?r=1', { waitUntil: 'domcontentloaded', timeout: 90000 });
 
     // Determine which path to use: VIN or Make & Model
     if (vin && vin.trim()) {
       // Use VIN path
       steps.push(`Using VIN path: VIN=${vin}, Mileage=${mileage}, Zip=${zip}, Email=${email}`);
+      if (progressCallback) progressCallback('Using VIN lookup method...');
       
       // Click VIN link
       const vinLink = page.locator('a', { hasText: 'VIN' });
       await vinLink.first().click();
 
       // Enter VIN (try several candidates)
+      if (progressCallback) progressCallback('Entering VIN number...');
       const vinSelectors = [
         'input[name="vin"]',
         'input#vin',
@@ -104,6 +107,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     } else if (make && model && year) {
       // Use Make & Model path
       steps.push(`Using Make & Model path: ${year} ${make} ${model}, Mileage=${mileage}, Zip=${zip}, Email=${email}`);
+      if (progressCallback) progressCallback('Using Make & Model lookup...');
       
       // Make & Model tab should be active by default, but let's ensure it
       const makeModelTab = page.locator('a, button', { hasText: /Make.*Model/i });
@@ -112,33 +116,79 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       }
 
       // Select Year
+      if (progressCallback) progressCallback('Selecting year...');
       const yearSelect = page.locator('select').first();
       if (await yearSelect.count()) {
+        await yearSelect.waitFor({ state: 'visible', timeout: 10000 });
         await yearSelect.selectOption({ label: year });
         steps.push(`Selected year: ${year}`);
         selections.push(`Year: ${year}`);
       }
 
-      // Select Make
+      // Wait for make dropdown to be enabled after year selection
+      if (progressCallback) progressCallback('Selecting make...');
       const makeSelect = page.locator('select').nth(1);
       if (await makeSelect.count()) {
-        await makeSelect.selectOption({ label: make });
-        steps.push(`Selected make: ${make}`);
-        selections.push(`Make: ${make}`);
+        await makeSelect.waitFor({ state: 'visible', timeout: 10000 });
+        
+        // Wait for make dropdown to be enabled (not disabled)
+        await page.waitForFunction(() => {
+          const selects = document.querySelectorAll('select');
+          return selects[1] && !selects[1].disabled;
+        }, { timeout: 15000 });
+        
+        try {
+          await makeSelect.selectOption({ label: make });
+          steps.push(`Selected make: ${make}`);
+          selections.push(`Make: ${make}`);
+        } catch (e) {
+          // Try selecting by value or index if label fails
+          try {
+            await makeSelect.selectOption({ index: 1 }); // Select first non-placeholder option
+            const selectedMake = await makeSelect.inputValue();
+            steps.push(`Selected make (fallback): ${selectedMake}`);
+            selections.push(`Make: ${selectedMake}`);
+          } catch (e2) {
+            throw new Error(`Could not select make: ${make}`);
+          }
+        }
       }
 
-      // Select Model
+      // Wait for model dropdown to be enabled after make selection
+      if (progressCallback) progressCallback('Selecting model...');
       const modelSelect = page.locator('select').nth(2);
       if (await modelSelect.count()) {
-        await modelSelect.selectOption({ label: model });
-        steps.push(`Selected model: ${model}`);
-        selections.push(`Model: ${model}`);
+        // Wait for model dropdown to be enabled (not disabled)
+        await page.waitForFunction(() => {
+          const selects = document.querySelectorAll('select');
+          return selects[2] && !selects[2].disabled;
+        }, { timeout: 15000 });
+        
+        // Wait a bit more for options to load
+        await page.waitForTimeout(2000);
+        
+        try {
+          await modelSelect.selectOption({ label: model });
+          steps.push(`Selected model: ${model}`);
+          selections.push(`Model: ${model}`);
+        } catch (e) {
+          // Try selecting by value or index if label fails
+          try {
+            await modelSelect.selectOption({ index: 1 }); // Select first non-placeholder option
+            const selectedModel = await modelSelect.inputValue();
+            steps.push(`Selected model (fallback): ${selectedModel}`);
+            selections.push(`Model: ${selectedModel}`);
+          } catch (e2) {
+            throw new Error(`Could not select model: ${model}`);
+          }
+        }
       }
     } else {
       throw new Error('Either VIN or Make/Model/Year must be provided');
     }
 
     steps.push('Clicking Value My Car');
+    if (progressCallback) progressCallback('Clicking Get Valuation...');
     // Click Value My Car (try several CTA variants)
     const ctaCandidates = [
       page.getByRole('button', { name: /Value My Car/i }),
@@ -218,6 +268,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
 
     // Enter mileage (Vehicle Condition page has placeholder "Enter Vehicle Mileage")
     steps.push('Filling Vehicle Condition: mileage');
+    if (progressCallback) progressCallback('Entering mileage...');
     let mileageFilled = false;
     try {
       const mil = page.getByPlaceholder(/Enter\s+Vehicle\s+Mileage/i);
@@ -244,6 +295,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
 
     // Zip code (placeholder "Enter ZIP Code")
     steps.push('Filling Vehicle Condition: ZIP code');
+    if (progressCallback) progressCallback('Entering ZIP code...');
     let zipFilled = false;
     try {
       const zipEl = page.getByPlaceholder(/Enter\s+ZIP\s+Code/i);
@@ -261,6 +313,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
 
     // Email (placeholder "Enter Email Address")
     steps.push('Filling Vehicle Condition: email');
+    if (progressCallback) progressCallback('Entering email address...');
     let emailFilled = false;
     try {
       const emailEl = page.getByPlaceholder(/Enter\s+Email\s+Address/i);
@@ -304,6 +357,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     }
 
     // Wait for valuation result to appear
+    if (progressCallback) progressCallback('Waiting for valuation result...');
     await page.waitForLoadState('networkidle', { timeout: 30000 });
 
     // Take screenshot of valuation page
