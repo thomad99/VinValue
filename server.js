@@ -21,8 +21,8 @@ app.use(cors({
   origin: ['http://localhost:3000', 'https://chat.openai.com', 'https://*.openai.com'],
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 async function ensureChromiumInstalled() {
