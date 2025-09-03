@@ -397,55 +397,142 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     if (currentUrl.includes('vehicledetails') || currentUrl.includes('vehicle-details')) {
       steps.push('On Vehicle Details page - filling all dropdowns');
       
+      // Wait for page to fully load
+      await page.waitForTimeout(3000);
+      
       // Find all dropdowns/selects on the page
       const allSelects = await page.locator('select').all();
+      console.log(`Found ${allSelects.length} select elements on Vehicle Details page`);
       let dropdownsFilled = 0;
       
-      for (const select of allSelects) {
-        const options = await select.locator('option').all();
-        if (options.length > 1) {
-          // Select the first non-empty option (skip "Select..." placeholder)
-          for (let i = 1; i < options.length; i++) {
-            const value = await options[i].getAttribute('value');
-            const text = await options[i].textContent();
-            if (value && value.trim() && text && !text.toLowerCase().includes('select')) {
-              await select.selectOption(value);
-              dropdownsFilled++;
-              const selectionText = text.trim();
-              steps.push(`Selected dropdown option: ${selectionText}`);
-              selections.push(selectionText); // Record the selection
-              break;
+      for (let i = 0; i < allSelects.length; i++) {
+        const select = allSelects[i];
+        try {
+          const selectId = await select.getAttribute('id');
+          const selectName = await select.getAttribute('name');
+          console.log(`Processing select ${i}: id="${selectId}", name="${selectName}"`);
+          
+          const options = await select.locator('option').all();
+          console.log(`Select ${i} has ${options.length} options`);
+          
+          if (options.length > 1) {
+            // Select the first non-empty option (skip "Select..." placeholder)
+            for (let j = 1; j < options.length; j++) {
+              const value = await options[j].getAttribute('value');
+              const text = await options[j].textContent();
+              
+              console.log(`Option ${j}: value="${value}", text="${text}"`);
+              
+              if (value && value.trim() && text && 
+                  !text.toLowerCase().includes('select') &&
+                  !text.toLowerCase().includes('choose') &&
+                  !text.toLowerCase().includes('please')) {
+                
+                console.log(`Selecting option: ${text}`);
+                await select.selectOption(value);
+                dropdownsFilled++;
+                const selectionText = text.trim();
+                steps.push(`Selected dropdown option: ${selectionText}`);
+                selections.push(selectionText); // Record the selection
+                break;
+              }
             }
           }
+        } catch (e) {
+          console.log(`Error processing select ${i}:`, e.message);
         }
       }
       
-      if (dropdownsFilled === 0) {
-        steps.push('No dropdowns found to fill');
+      // Also try to handle custom dropdown elements that might not be <select>
+      try {
+        const customDropdowns = await page.locator('div[role="combobox"], div[class*="dropdown"], div[class*="select"]').all();
+        console.log(`Found ${customDropdowns.length} custom dropdown elements`);
+        
+        for (const dropdown of customDropdowns) {
+          const isVisible = await dropdown.isVisible();
+          if (isVisible) {
+            console.log('Found visible custom dropdown, attempting to interact');
+            await dropdown.click();
+            await page.waitForTimeout(1000);
+            
+            // Look for options to select
+            const optionSelectors = [
+              '[role="option"]',
+              '.option',
+              'li',
+              'div[class*="option"]'
+            ];
+            
+            for (const optionSel of optionSelectors) {
+              const options = await dropdown.locator(optionSel).all();
+              if (options.length > 0) {
+                const firstOption = options[0];
+                const optionText = await firstOption.textContent();
+                console.log(`Clicking custom dropdown option: ${optionText}`);
+                await firstOption.click();
+                selections.push(optionText);
+                steps.push(`Selected custom dropdown option: ${optionText}`);
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Error handling custom dropdowns:', e.message);
       }
+      
+      if (dropdownsFilled === 0) {
+        steps.push('No standard dropdowns found to fill');
+      }
+      
+      // Wait a moment for any dynamic updates
+      await page.waitForTimeout(2000);
       
       // Click Continue to proceed to Vehicle Condition page
       const continueSelectors = [
         'button:has-text("Continue to Step 3")',
         'button:has-text("Continue")',
         'button[type="submit"]',
-        'input[type="submit"]'
+        'input[type="submit"]',
+        'button[class*="continue"]',
+        'button[class*="next"]'
       ];
       
       let continued = false;
       for (const sel of continueSelectors) {
-        const btn = page.locator(sel).first();
-        if (await btn.count()) {
-          await btn.click();
-          continued = true;
-          steps.push('Clicked Continue to proceed to Vehicle Condition');
-          break;
+        try {
+          const btn = page.locator(sel).first();
+          if (await btn.count()) {
+            const isVisible = await btn.isVisible();
+            const isEnabled = await btn.isEnabled();
+            console.log(`Found continue button: ${sel}, visible: ${isVisible}, enabled: ${isEnabled}`);
+            
+            if (isVisible && isEnabled) {
+              await btn.click();
+              continued = true;
+              steps.push('Clicked Continue to proceed to Vehicle Condition');
+              break;
+            }
+          }
+        } catch (e) {
+          console.log(`Continue button ${sel} failed:`, e.message);
         }
       }
       
       if (continued) {
         // Wait for Vehicle Condition page to load
         await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
+      } else {
+        console.log('Could not find or click continue button');
+        // Take debug screenshot
+        try {
+          const shotsDir = path.join(__dirname, 'public', 'shots');
+          if (!fs.existsSync(shotsDir)) fs.mkdirSync(shotsDir, { recursive: true });
+          const name = `vehicle-details-debug-${Date.now()}.png`;
+          const filePath = path.join(shotsDir, name);
+          await page.screenshot({ path: filePath, fullPage: true });
+          console.log(`Vehicle Details debug screenshot saved: ${name}`);
+        } catch (_) {}
       }
     }
 
