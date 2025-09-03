@@ -15,5 +15,7 @@ services:
         sync: false
       - key: WEBUYZIPCODE
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
     # No persistent disk needed when PLAYWRIGHT_BROWSERS_PATH=0 (browsers ship in node_modules)
 

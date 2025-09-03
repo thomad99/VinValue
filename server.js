@@ -372,6 +372,70 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
   }
 }
 
+// OpenAI Vision API for image analysis
+async function analyzeCarImage(imageDataUrl) {
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+  if (!openaiApiKey) {
+    throw new Error('OpenAI API key not configured');
+  }
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openaiApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Analyze this car image and extract: 1) VIN (17-character code if visible), 2) Year, 3) Make, 4) Model, 5) Mileage. Return as JSON: {"vin": "string or null", "year": "string or null", "make": "string or null", "model": "string or null", "mileage": "string or null"}. If no VIN but you find make/model/year, that\'s fine - we can use those instead.'
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: imageDataUrl
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 300
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices[0].message.content;
+  
+  try {
+    return JSON.parse(content);
+  } catch (e) {
+    throw new Error('Failed to parse OpenAI response');
+  }
+}
+
+app.post('/api/analyze-image', async (req, res) => {
+  const { imageDataUrl } = req.body;
+  if (!imageDataUrl) {
+    return res.status(400).json({ error: 'Image data URL is required' });
+  }
+  
+  try {
+    const result = await analyzeCarImage(imageDataUrl);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to analyze image' });
+  }
+});
+
 app.post('/api/value', async (req, res) => {
   const { vin, mileage, zip, email, make, model, year } = req.body || {};
   if ((!vin && (!make || !model || !year)) || !mileage) {

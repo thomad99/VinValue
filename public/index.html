@@ -94,7 +94,7 @@
         <div id="error" style="color: #fca5a5"></div>
       </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+
     <script>
       const form = document.getElementById('valueForm');
       const result = document.getElementById('result');
@@ -209,58 +209,49 @@
         const file = vinImage.files[0];
         try {
           scanVinBtn.disabled = true;
-          scanVinBtn.textContent = 'Scanning…';
+          scanVinBtn.textContent = 'Analyzing with AI…';
           const dataUrl = await fileToDataUrl(file);
-          const { data } = await Tesseract.recognize(dataUrl, 'eng');
-          const text = (data && data.text ? data.text : '').toUpperCase();
           
-          // First try to find VIN
-          const vinMatches = [...text.matchAll(VIN_REGEX)].map(m => m[1]);
-          if (vinMatches.length > 0) {
-            vinInput.value = vinMatches[0];
-            scanVinBtn.textContent = 'Scan VIN';
+          // Use OpenAI Vision API instead of Tesseract
+          const response = await fetch('/api/analyze-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageDataUrl: dataUrl })
+          });
+          
+          if (!response.ok) {
+            throw new Error('AI analysis failed');
+          }
+          
+          const result = await response.json();
+          
+          // Handle VIN found
+          if (result.vin) {
+            vinInput.value = result.vin;
+            alert(`VIN detected: ${result.vin}`);
             return;
           }
           
-          // If no VIN, try to extract car details
-          const yearMatches = [...text.matchAll(YEAR_REGEX)].map(m => m[0]);
-          const mileageMatches = [...text.matchAll(MILEAGE_REGEX)].map(m => m[1].replace(/,/g, ''));
+          // Handle car details found
+          const details = [];
+          if (result.make && result.model) details.push(`Make/Model: ${result.make} ${result.model}`);
+          if (result.year) details.push(`Year: ${result.year}`);
+          if (result.mileage) details.push(`Mileage: ${result.mileage}`);
           
-          // Look for make/model patterns
-          const makeModelPatterns = [
-            /(FORD|CHEVROLET|CHEVY|TOYOTA|HONDA|BMW|MERCEDES|AUDI|NISSAN|HYUNDAI|KIA|MAZDA|SUBARU|VOLKSWAGEN|VW|LEXUS|ACURA|INFINITI|CADILLAC|LINCOLN|BUICK|CHRYSLER|DODGE|JEEP|RAM|GMC|VOLVO|SAAB|JAGUAR|LAND ROVER|PORSCHE|FERRARI|LAMBORGHINI|MASERATI|BENTLEY|ROLLS ROYCE|ASTON MARTIN|MCLAREN|ALFA ROMEO|GENESIS|RIVIAN|LUCID|TESLA)\s+([A-Z][A-Z0-9\s]+)/gi,
-            /(MUSTANG|CAMARO|CORVETTE|SILVERADO|F-150|CIVIC|ACCORD|CAMRY|COROLLA|PRIUS|3 SERIES|5 SERIES|X3|X5|C-CLASS|E-CLASS|S-CLASS|A4|A6|Q5|Q7|ALTIMA|SENTRA|ROGUE|PATHFINDER|SONATA|ELANTRA|TUCSON|SANTA FE|CX-5|CX-9|OUTBACK|FORESTER|GOLF|JETTA|PASSAT|ATLAS|IS|ES|GS|LS|RX|GX|LX|TL|TSX|RL|MDX|RDX|Q50|Q60|Q70|QX50|QX60|QX80|CTS|ATS|XTS|ESCALADE|YUKON|SIERRA|SILVERADO|MKC|MKX|MKZ|MKS|MKT|NAUTILUS|AVIATOR|CORS AIR|ENCLAVE|LACROSSE|REGAL|VERANO|CASCADA|300|CHARGER|CHALLENGER|DURANGO|GRAND CHEROKEE|WRANGLER|COMPASS|RENEGADE|GLADIATOR|WRANGLER|GRAND WAGONEER|SILVERADO|SIERRA|YUKON|TAHOE|SUBURBAN|ESCALADE|XT4|XT5|XT6|CT4|CT5|CT6|XTS|ATS|CTS|S60|S90|XC40|XC60|XC90|V60|V90|MODEL S|MODEL 3|MODEL X|MODEL Y|CYBERTRUCK)/gi
-          ];
-          
-          let makeModel = '';
-          for (const pattern of makeModelPatterns) {
-            const matches = [...text.matchAll(pattern)];
-            if (matches.length > 0) {
-              makeModel = matches[0][0].trim();
-              break;
-            }
-          }
-          
-          // If we found car details, ask user to confirm
-          if (yearMatches.length > 0 || mileageMatches.length > 0 || makeModel) {
-            const details = [];
-            if (makeModel) details.push(`Make/Model: ${makeModel}`);
-            if (yearMatches.length > 0) details.push(`Year: ${yearMatches[0]}`);
-            if (mileageMatches.length > 0) details.push(`Mileage: ${mileageMatches[0]}`);
-            
+          if (details.length > 0) {
             const confirmed = confirm(`No VIN found, but detected:\n${details.join('\n')}\n\nUse these details to get valuation?`);
             if (confirmed) {
               // Clear VIN and auto-fill detected details
               vinInput.value = '';
-              if (mileageMatches.length > 0) {
-                document.getElementById('mileage').value = mileageMatches[0];
+              if (result.mileage) {
+                document.getElementById('mileage').value = result.mileage.replace(/[^\d]/g, '');
               }
               
               // Store detected details for submission
               window.detectedCarDetails = {
-                make: makeModel.split(' ')[0] || '',
-                model: makeModel.split(' ').slice(1).join(' ') || '',
-                year: yearMatches[0] || ''
+                make: result.make || '',
+                model: result.model || '',
+                year: result.year || ''
               };
               
               alert('Car details detected and stored. Click "Get Valuation" to proceed with Make & Model lookup.');
@@ -271,7 +262,7 @@
             alert('No VIN or car details detected. Try a clearer photo of the VIN label or car listing.');
           }
         } catch (e) {
-          alert('Scan failed: ' + (e && e.message ? e.message : 'unknown error'));
+          alert('AI analysis failed: ' + (e && e.message ? e.message : 'unknown error'));
         } finally {
           scanVinBtn.disabled = false;
           scanVinBtn.textContent = 'Scan VIN';
