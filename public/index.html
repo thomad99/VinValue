@@ -62,7 +62,7 @@
           <label for="vin">VIN</label>
           <div class="vin-row">
             <input id="vin" name="vin" placeholder="Enter VIN" required />
-            <button id="scanVin" type="button" title="Scan VIN using camera">Scan VIN</button>
+            <button id="scanVin" type="button" title="Scan image using camera">Scan Image</button>
           </div>
           <input id="vinImage" type="file" accept="image/*" capture="environment" style="display:none" />
         </div>
@@ -209,7 +209,7 @@
         const file = vinImage.files[0];
         try {
           scanVinBtn.disabled = true;
-          scanVinBtn.textContent = 'Analyzing with AI…';
+          scanVinBtn.textContent = 'Analyzing…';
           const dataUrl = await fileToDataUrl(file);
           
           // Use OpenAI Vision API instead of Tesseract
@@ -225,39 +225,34 @@
           
           const result = await response.json();
           
-          // Handle VIN found
+          // Handle VIN found - use VIN path
           if (result.vin) {
             vinInput.value = result.vin;
-            alert(`VIN detected: ${result.vin}`);
+            alert(`VIN detected: ${result.vin}. Click "Get Valuation" to proceed.`);
             return;
           }
           
-          // Handle car details found
+          // Handle car details found - use Make & Model path
           const details = [];
           if (result.make && result.model) details.push(`Make/Model: ${result.make} ${result.model}`);
           if (result.year) details.push(`Year: ${result.year}`);
           if (result.mileage) details.push(`Mileage: ${result.mileage}`);
           
           if (details.length > 0) {
-            const confirmed = confirm(`No VIN found, but detected:\n${details.join('\n')}\n\nUse these details to get valuation?`);
-            if (confirmed) {
-              // Clear VIN and auto-fill detected details
-              vinInput.value = '';
-              if (result.mileage) {
-                document.getElementById('mileage').value = result.mileage.replace(/[^\d]/g, '');
-              }
-              
-              // Store detected details for submission
-              window.detectedCarDetails = {
-                make: result.make || '',
-                model: result.model || '',
-                year: result.year || ''
-              };
-              
-              alert('Car details detected and stored. Click "Get Valuation" to proceed with Make & Model lookup.');
-            } else {
-              alert('No VIN detected. Try a clearer, closer photo of the VIN label or car listing.');
+            // Auto-fill the form with detected details
+            vinInput.value = ''; // Clear VIN since we don't have one
+            if (result.mileage) {
+              document.getElementById('mileage').value = result.mileage.replace(/[^\d]/g, '');
             }
+            
+            // Store detected details for Make & Model path
+            window.detectedCarDetails = {
+              make: result.make || '',
+              model: result.model || '',
+              year: result.year || ''
+            };
+            
+            alert(`Car details detected:\n${details.join('\n')}\n\nForm updated. Click "Get Valuation" to proceed with Make & Model lookup.`);
           } else {
             alert('No VIN or car details detected. Try a clearer photo of the VIN label or car listing.');
           }
@@ -265,7 +260,7 @@
           alert('AI analysis failed: ' + (e && e.message ? e.message : 'unknown error'));
         } finally {
           scanVinBtn.disabled = false;
-          scanVinBtn.textContent = 'Scan VIN';
+          scanVinBtn.textContent = 'Scan Image';
           vinImage.value = '';
         }
       });

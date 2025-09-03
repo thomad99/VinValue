@@ -154,7 +154,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     if (!clickedCTA) throw new Error('Could not find Value My Car button');
 
     // Wait for next page to render (URL may vary: vehicledetails or vehiclecondition)
-    await page.waitForLoadState('domcontentloaded', { timeout: 90000 });
+    await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
 
     // Check if we're on Vehicle Details page (step 2) and need to select dropdowns
     const currentUrl = page.url();
@@ -209,8 +209,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       
       if (continued) {
         // Wait for Vehicle Condition page to load
-        await page.waitForLoadState('domcontentloaded', { timeout: 90000 });
-        await page.waitForTimeout(2000); // Give it a moment to render
+        await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
       }
     }
 
@@ -219,7 +218,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     let mileageFilled = false;
     try {
       const mil = page.getByPlaceholder(/Enter\s+Vehicle\s+Mileage/i);
-      await mil.waitFor({ state: 'visible', timeout: 30000 });
+      await mil.waitFor({ state: 'visible', timeout: 15000 });
       await mil.fill(String(mileage));
       mileageFilled = true;
     } catch (_) {}
@@ -245,7 +244,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     let zipFilled = false;
     try {
       const zipEl = page.getByPlaceholder(/Enter\s+ZIP\s+Code/i);
-      await zipEl.waitFor({ state: 'visible', timeout: 20000 });
+      await zipEl.waitFor({ state: 'visible', timeout: 10000 });
       await zipEl.fill(String(zip));
       zipFilled = true;
     } catch (_) {}
@@ -262,7 +261,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     let emailFilled = false;
     try {
       const emailEl = page.getByPlaceholder(/Enter\s+Email\s+Address/i);
-      await emailEl.waitFor({ state: 'visible', timeout: 20000 });
+      await emailEl.waitFor({ state: 'visible', timeout: 10000 });
       await emailEl.fill(email);
       emailFilled = true;
     } catch (_) {}
@@ -302,7 +301,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     }
 
     // Wait for valuation result to appear
-    await page.waitForLoadState('networkidle', { timeout: 90000 });
+    await page.waitForLoadState('networkidle', { timeout: 30000 });
 
     // Take screenshot of valuation page
     let resultShot = null;
