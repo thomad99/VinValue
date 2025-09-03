@@ -126,10 +126,18 @@
       const toggleDetails = document.getElementById('toggleDetails');
       const detailsContent = document.getElementById('detailsContent');
 
+      // Add click handler to submit button for debugging
+      submit.addEventListener('click', (e) => {
+        console.log('Submit button clicked!');
+      });
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        console.log('Form submitted!');
         result.hidden = true;
-        price.textContent = '';
+        webuyPrice.textContent = '';
+        marketPrice.textContent = '';
+        marketDetails.textContent = '';
         error.textContent = '';
         submit.disabled = true;
         submit.textContent = 'Working…';
@@ -148,6 +156,21 @@
             zip: document.getElementById('zip').value.trim(),
             email: document.getElementById('email').value.trim(),
           };
+          
+          console.log('Form payload:', payload);
+          
+          // Basic validation
+          if (!payload.vin && !window.detectedCarDetails) {
+            error.textContent = 'Please enter a VIN or scan an image';
+            result.hidden = false;
+            return;
+          }
+          
+          if (!payload.mileage) {
+            error.textContent = 'Please enter mileage';
+            result.hidden = false;
+            return;
+          }
           
           // Add detected car details if no VIN but we have make/model/year
           if (!payload.vin && window.detectedCarDetails) {
@@ -179,11 +202,13 @@
             }
           }, 2000);
           
+          console.log('Sending request to /api/value with payload:', payload);
           const res = await fetch('/api/value', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
+          console.log('Response status:', res.status);
           
           clearInterval(progressInterval);
           progress.textContent = 'Processing valuation result...';
