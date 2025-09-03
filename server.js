@@ -17,7 +17,10 @@ const DEFAULT_ZIP = process.env.WEBUYZIPCODE || '34238';
 const { execFile } = require('child_process');
 const fs = require('fs');
 
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000', 'https://chat.openai.com', 'https://*.openai.com'],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -459,6 +462,64 @@ app.get('/', (_req, res) => {
 // Expose server defaults for client prefill
 app.get('/api/defaults', (_req, res) => {
   res.json({ zip: DEFAULT_ZIP, email: DEFAULT_EMAIL });
+});
+
+// GPT-friendly endpoint with simplified response
+app.post('/api/gpt-value', async (req, res) => {
+  try {
+    const { vin, mileage, make, model, year, zip, email } = req.body;
+    
+    // Validate input
+    if (!vin && (!make || !model || !year)) {
+      return res.status(400).json({ 
+        error: 'Either VIN or (make, model, year) must be provided',
+        usage: {
+          vin_path: 'Provide vin and mileage',
+          make_model_path: 'Provide make, model, year, and mileage'
+        }
+      });
+    }
+    
+    if (!mileage) {
+      return res.status(400).json({ 
+        error: 'Mileage is required',
+        usage: 'Provide mileage in miles (e.g., 50000)'
+      });
+    }
+    
+    // Use defaults if not provided
+    const finalZip = zip || DEFAULT_ZIP;
+    const finalEmail = email || DEFAULT_EMAIL;
+    
+    console.log(`GPT Request: ${vin ? 'VIN' : 'Make/Model'} path`);
+    
+    const result = await fetchValuation({
+      vin,
+      mileage: parseInt(mileage),
+      zip: finalZip,
+      email: finalEmail,
+      make,
+      model,
+      year
+    });
+    
+    // Return simplified response for GPT
+    res.json({
+      success: true,
+      valuation: result.valuation,
+      method: vin ? 'VIN Lookup' : 'Make & Model Lookup',
+      selections: result.selections || [],
+      message: `Car valued at $${result.valuation} using ${vin ? 'VIN' : 'Make & Model'} method`
+    });
+    
+  } catch (error) {
+    console.error('GPT API Error:', error);
+    res.status(500).json({ 
+      error: 'Valuation failed', 
+      message: error.message,
+      details: 'Check the web interface for detailed debugging information'
+    });
+  }
 });
 
 app.listen(PORT, () => {
