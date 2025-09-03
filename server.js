@@ -453,28 +453,101 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     steps.push('Filling Vehicle Condition: mileage');
     if (progressCallback) progressCallback('Entering mileage...');
     let mileageFilled = false;
-    try {
-      const mil = page.getByPlaceholder(/Enter\s+Vehicle\s+Mileage/i);
-      await mil.waitFor({ state: 'visible', timeout: 15000 });
-      await mil.fill(String(mileage));
-      mileageFilled = true;
-    } catch (_) {}
-    if (!mileageFilled) {
-      const mileageSelectors = [
-        'input[name*="mileage" i]',
-        'input[name*="odometer" i]',
-        'input[type="number"]',
-        'input[placeholder*="odometer" i]',
-        'input[placeholder*="mileage" i]',
-        'input[aria-label*="mileage" i]',
-        '#mileage'
-      ];
-      for (const sel of mileageSelectors) {
-        const el = page.locator(sel).first();
-        if (await el.count()) { await el.fill(String(mileage)); mileageFilled = true; break; }
+    
+    // Try multiple approaches to find and fill mileage
+    const mileageApproaches = [
+      // Approach 1: By placeholder text
+      async () => {
+        const mil = page.getByPlaceholder(/Enter\s+Vehicle\s+Mileage/i);
+        await mil.waitFor({ state: 'visible', timeout: 10000 });
+        await mil.fill(String(mileage));
+        return true;
+      },
+      // Approach 2: By placeholder variations
+      async () => {
+        const mil = page.getByPlaceholder(/odometer/i);
+        await mil.waitFor({ state: 'visible', timeout: 10000 });
+        await mil.fill(String(mileage));
+        return true;
+      },
+      // Approach 3: By name attributes
+      async () => {
+        const selectors = [
+          'input[name*="mileage" i]',
+          'input[name*="odometer" i]',
+          'input[name*="miles" i]'
+        ];
+        for (const sel of selectors) {
+          const el = page.locator(sel).first();
+          if (await el.count()) {
+            await el.fill(String(mileage));
+            return true;
+          }
+        }
+        return false;
+      },
+      // Approach 4: By input type and context
+      async () => {
+        const numberInputs = page.locator('input[type="number"]');
+        const count = await numberInputs.count();
+        for (let i = 0; i < count; i++) {
+          const input = numberInputs.nth(i);
+          const placeholder = await input.getAttribute('placeholder');
+          if (placeholder && (placeholder.toLowerCase().includes('mileage') || 
+                             placeholder.toLowerCase().includes('odometer') ||
+                             placeholder.toLowerCase().includes('miles'))) {
+            await input.fill(String(mileage));
+            return true;
+          }
+        }
+        return false;
+      },
+      // Approach 5: By label text
+      async () => {
+        const labels = page.locator('label');
+        const labelCount = await labels.count();
+        for (let i = 0; i < labelCount; i++) {
+          const label = labels.nth(i);
+          const labelText = await label.textContent();
+          if (labelText && (labelText.toLowerCase().includes('mileage') || 
+                           labelText.toLowerCase().includes('odometer'))) {
+            const input = page.locator(`input[id="${await label.getAttribute('for')}"]`);
+            if (await input.count()) {
+              await input.fill(String(mileage));
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+    ];
+    
+    for (const approach of mileageApproaches) {
+      try {
+        mileageFilled = await approach();
+        if (mileageFilled) {
+          console.log('Successfully filled mileage using approach');
+          break;
+        }
+      } catch (e) {
+        console.log('Mileage approach failed:', e.message);
+        continue;
       }
     }
-    if (!mileageFilled) throw new Error('Could not find mileage/odometer input');
+    
+    if (!mileageFilled) {
+      // Take a screenshot to help debug
+      try {
+        const shotsDir = path.join(__dirname, 'public', 'shots');
+        if (!fs.existsSync(shotsDir)) fs.mkdirSync(shotsDir, { recursive: true });
+        const name = `mileage-debug-${Date.now()}.png`;
+        const filePath = path.join(shotsDir, name);
+        await page.screenshot({ path: filePath, fullPage: true });
+        console.log(`Debug screenshot saved: ${name}`);
+      } catch (_) {}
+      
+      throw new Error('Could not find mileage/odometer input field');
+    }
 
     // Zip code (placeholder "Enter ZIP Code")
     steps.push('Filling Vehicle Condition: ZIP code');
