@@ -73,12 +73,12 @@
           </div>
           <div>
             <label for="zip">Zip Code</label>
-            <input id="zip" name="zip" placeholder="defaults to server env WEBUYZIPCODE" />
+            <input id="zip" name="zip" placeholder="Loading default..." />
           </div>
         </div>
         <div>
           <label for="email">Email</label>
-          <input id="email" name="email" type="email" placeholder="defaults to server env WEBUYEMAIL" />
+          <input id="email" name="email" type="email" placeholder="Loading default..." />
         </div>
         <button id="submit" type="submit">Get Valuation</button>
       </form>
@@ -457,12 +457,32 @@
       // Prefill defaults from server environment
       (async () => {
         try {
+          console.log('Fetching default values...');
           const res = await fetch('/api/defaults');
-          if (!res.ok) return;
+          if (!res.ok) {
+            console.log('Failed to fetch defaults:', res.status);
+            return;
+          }
           const { zip, email } = await res.json();
-          if (zip && !zipInput.value) zipInput.value = String(zip);
-          if (email && !emailInput.value) emailInput.value = email;
-        } catch (_) {}
+          console.log('Default values received:', { zip, email });
+          
+          // Always set the default values and update placeholders
+          if (zip) {
+            zipInput.value = String(zip);
+            zipInput.placeholder = `Default: ${zip}`;
+            console.log('Set ZIP default:', zip);
+          }
+          if (email) {
+            emailInput.value = email;
+            emailInput.placeholder = `Default: ${email}`;
+            console.log('Set email default:', email);
+          }
+        } catch (e) {
+          console.log('Could not fetch defaults:', e);
+          // Set fallback placeholders
+          zipInput.placeholder = 'Enter ZIP code';
+          emailInput.placeholder = 'Enter email address';
+        }
       })();
     </script>
   </body>
