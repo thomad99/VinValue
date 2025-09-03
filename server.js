@@ -411,16 +411,26 @@ async function analyzeCarImage(imageDataUrl) {
   });
 
   if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error('OpenAI API error:', response.status, response.statusText, errorText);
+    throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json();
+  console.log('OpenAI response:', data);
+  
+  if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+    throw new Error('Invalid OpenAI response format');
+  }
+  
   const content = data.choices[0].message.content;
+  console.log('OpenAI content:', content);
   
   try {
     return JSON.parse(content);
   } catch (e) {
-    throw new Error('Failed to parse OpenAI response');
+    console.error('Failed to parse OpenAI response as JSON:', content);
+    throw new Error('Failed to parse OpenAI response as JSON');
   }
 }
 
@@ -431,10 +441,17 @@ app.post('/api/analyze-image', async (req, res) => {
   }
   
   try {
+    console.log('Starting image analysis...');
     const result = await analyzeCarImage(imageDataUrl);
+    console.log('Image analysis result:', result);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Failed to analyze image' });
+    console.error('Image analysis error:', err);
+    res.status(500).json({ 
+      error: 'AI analysis failed', 
+      message: err.message || 'Failed to analyze image',
+      details: 'Check server logs for more information'
+    });
   }
 });
 

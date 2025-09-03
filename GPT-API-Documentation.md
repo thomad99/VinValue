@@ -86,3 +86,97 @@
 ```
 
 **GPT Response**: "Your 2020 Honda Civic with 50,000 miles is valued at **$15,000** using Make & Model lookup. The system automatically selected 'Sedan' and 'Automatic' as the vehicle specifications."
+
+## Fixed OpenAPI Schema
+
+Here's the corrected schema to use in your GPT:
+
+```json
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "VIN Value API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://vinvalue.onrender.com"
+    }
+  ],
+  "paths": {
+    "/api/gpt-value": {
+      "post": {
+        "operationId": "getCarValuation",
+        "summary": "Get car valuation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "vin": {"type": "string", "description": "Vehicle Identification Number"},
+                  "make": {"type": "string", "description": "Car manufacturer"},
+                  "model": {"type": "string", "description": "Car model"},
+                  "year": {"type": "string", "description": "Car year"},
+                  "mileage": {"type": "number", "description": "Mileage in miles"},
+                  "zip": {"type": "string", "description": "ZIP code (optional)"},
+                  "email": {"type": "string", "description": "Email address (optional)"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful valuation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {"type": "boolean"},
+                    "valuation": {"type": "number"},
+                    "method": {"type": "string"},
+                    "selections": {"type": "array", "items": {"type": "string"}},
+                    "message": {"type": "string"}
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {"type": "string"},
+                    "usage": {"type": "object"}
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {"type": "string"},
+                    "message": {"type": "string"},
+                    "details": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
