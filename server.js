@@ -76,11 +76,42 @@ async function fetchMarketValue(vin, progressCallback = null) {
     const context = await browser.newContext();
     const page = await context.newPage();
     
-    // Navigate to VinAudit.com market value page
-    await page.goto(`https://vinaudit.com/vin/${vin}/market-value`, { 
-      waitUntil: 'domcontentloaded', 
-      timeout: 30000 
-    });
+    // Try different VinAudit URL formats
+    const urls = [
+      `https://vinaudit.com/vin/${vin}/market-value`,
+      `https://vinaudit.com/vin/${vin}`,
+      `https://vinaudit.com/check/${vin}`
+    ];
+    
+    let success = false;
+    for (const url of urls) {
+      try {
+        console.log(`Trying VinAudit URL: ${url}`);
+        await page.goto(url, { 
+          waitUntil: 'domcontentloaded', 
+          timeout: 30000 
+        });
+        
+        const currentUrl = page.url();
+        const pageTitle = await page.title();
+        console.log(`Current URL: ${currentUrl}, Title: ${pageTitle}`);
+        
+        // Check if we have market value content
+        const bodyText = await page.textContent('body');
+        if (bodyText.includes('Market Value') || bodyText.includes('Market Average') || bodyText.includes('$')) {
+          console.log('Found market value content, proceeding...');
+          success = true;
+          break;
+        }
+      } catch (e) {
+        console.log(`Failed to load ${url}:`, e.message);
+        continue;
+      }
+    }
+    
+    if (!success) {
+      throw new Error('Could not access VinAudit market value data');
+    }
     
     // Wait for the market value chart to load
     await page.waitForTimeout(3000);
@@ -119,35 +150,86 @@ async function fetchMarketValue(vin, progressCallback = null) {
     };
     
     try {
-      // Look for market average
+      // Get all text content from the page
       const averageText = await page.textContent('body');
-      const averageMatch = averageText.match(/Market Average.*?\$([\d,]+)/i);
-      if (averageMatch) {
-        marketData.average = parseInt(averageMatch[1].replace(/,/g, ''));
+      console.log('Page content length:', averageText.length);
+      console.log('First 500 chars:', averageText.substring(0, 500));
+      
+      // Look for market average with multiple patterns
+      const averagePatterns = [
+        /Market Average.*?\$([\d,]+)/i,
+        /Average.*?\$([\d,]+)/i,
+        /\$([\d,]+).*?average/i,
+        /Market Value.*?\$([\d,]+)/i
+      ];
+      
+      for (const pattern of averagePatterns) {
+        const match = averageText.match(pattern);
+        if (match) {
+          marketData.average = parseInt(match[1].replace(/,/g, ''));
+          console.log('Found market average:', marketData.average);
+          break;
+        }
       }
       
       // Look for below market value
-      const belowMatch = averageText.match(/Below Market.*?\$([\d,]+)/i);
-      if (belowMatch) {
-        marketData.belowMarket = parseInt(belowMatch[1].replace(/,/g, ''));
+      const belowPatterns = [
+        /Below Market.*?\$([\d,]+)/i,
+        /Low.*?\$([\d,]+)/i,
+        /Minimum.*?\$([\d,]+)/i
+      ];
+      
+      for (const pattern of belowPatterns) {
+        const match = averageText.match(pattern);
+        if (match) {
+          marketData.belowMarket = parseInt(match[1].replace(/,/g, ''));
+          console.log('Found below market:', marketData.belowMarket);
+          break;
+        }
       }
       
       // Look for above market value
-      const aboveMatch = averageText.match(/Above Market.*?\$([\d,]+)/i);
-      if (aboveMatch) {
-        marketData.aboveMarket = parseInt(aboveMatch[1].replace(/,/g, ''));
+      const abovePatterns = [
+        /Above Market.*?\$([\d,]+)/i,
+        /High.*?\$([\d,]+)/i,
+        /Maximum.*?\$([\d,]+)/i
+      ];
+      
+      for (const pattern of abovePatterns) {
+        const match = averageText.match(pattern);
+        if (match) {
+          marketData.aboveMarket = parseInt(match[1].replace(/,/g, ''));
+          console.log('Found above market:', marketData.aboveMarket);
+          break;
+        }
       }
       
       // Look for estimate certainty
       const certaintyMatch = averageText.match(/Estimate Certainty.*?(\d+)%/i);
       if (certaintyMatch) {
         marketData.certainty = parseInt(certaintyMatch[1]);
+        console.log('Found certainty:', marketData.certainty);
       }
       
       // Look for sample size
       const sampleMatch = averageText.match(/(\d+)\s+similar vehicles/i);
       if (sampleMatch) {
         marketData.sampleSize = parseInt(sampleMatch[1]);
+        console.log('Found sample size:', marketData.sampleSize);
+      }
+      
+      // If we still don't have an average, try to find any reasonable price
+      if (!marketData.average) {
+        const priceMatches = averageText.match(/\$([\d,]+)/g);
+        if (priceMatches && priceMatches.length > 0) {
+          // Take the first reasonable price (likely the main valuation)
+          const firstPrice = priceMatches[0].replace(/[$,]/g, '');
+          const priceValue = parseInt(firstPrice);
+          if (priceValue > 1000 && priceValue < 200000) { // Reasonable car price range
+            marketData.average = priceValue;
+            console.log('Using first reasonable price as average:', marketData.average);
+          }
+        }
       }
       
     } catch (e) {
@@ -507,9 +589,12 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     let marketValue = null;
     if (vin && vin.trim()) {
       try {
+        console.log(`Starting market value lookup for VIN: ${vin}`);
         marketValue = await fetchMarketValue(vin, progressCallback);
+        console.log('Market value result:', marketValue);
       } catch (e) {
-        console.log('Market value lookup failed:', e.message);
+        console.error('Market value lookup failed:', e.message);
+        console.error('Error stack:', e.stack);
       }
     }
 
