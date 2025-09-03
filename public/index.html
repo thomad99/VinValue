@@ -82,6 +82,9 @@
         </div>
         <button id="submit" type="submit">Get Valuation</button>
       </form>
+      <div id="scanResult" style="display:none; margin-top: 20px; padding: 16px; background: #1f2937; border-radius: 8px; border: 1px solid #374151; color: #cbd5e1;">
+        <div id="scanResultContent"></div>
+      </div>
       <div id="result" class="result" hidden>
         <div id="price" style="font-size: 40px; font-weight: 800; text-align: center;"></div>
         <div id="details" style="margin-top: 12px;">
@@ -122,6 +125,10 @@
         // Hide details and reset toggle button
         detailsContent.style.display = 'none';
         toggleDetails.textContent = 'Show Details';
+        
+        // Hide scan result when starting valuation
+        const scanResult = document.getElementById('scanResult');
+        if (scanResult) scanResult.style.display = 'none';
         try {
           const payload = {
             vin: document.getElementById('vin').value.trim(),
@@ -235,7 +242,7 @@
           // Handle VIN found - use VIN path
           if (result.vin) {
             vinInput.value = result.vin;
-            alert(`VIN detected: ${result.vin}. Click "Get Valuation" to proceed.`);
+            showScanResult(`VIN detected: ${result.vin}`, 'vin');
             return;
           }
           
@@ -259,12 +266,17 @@
               year: result.year || ''
             };
             
-            alert(`Car details detected:\n${details.join('\n')}\n\nForm updated. Click "Get Valuation" to proceed with Make & Model lookup.`);
+            showScanResult(`Car details detected:<br>${details.join('<br>')}<br><br>Proceeding with Make & Model lookup...`, 'details');
+            
+            // Automatically proceed with valuation after a short delay
+            setTimeout(() => {
+              document.getElementById('valueForm').dispatchEvent(new Event('submit'));
+            }, 2000);
           } else {
-            alert('No VIN or car details detected. Try a clearer photo of the VIN label or car listing.');
+            showScanResult('No VIN or car details detected. Try a clearer photo of the VIN label or car listing.', 'error');
           }
         } catch (e) {
-          alert('AI analysis failed: ' + (e && e.message ? e.message : 'unknown error'));
+          showScanResult('AI analysis failed: ' + (e && e.message ? e.message : 'unknown error'), 'error');
         } finally {
           scanVinBtn.disabled = false;
           scanVinBtn.textContent = 'Scan Image';
@@ -306,6 +318,28 @@
           
           img.src = URL.createObjectURL(file);
         });
+      }
+
+      function showScanResult(message, type = 'info') {
+        const scanResult = document.getElementById('scanResult');
+        const scanResultContent = document.getElementById('scanResultContent');
+        
+        // Set color based on type
+        let borderColor = '#374151';
+        if (type === 'vin') borderColor = '#10b981';
+        else if (type === 'details') borderColor = '#3b82f6';
+        else if (type === 'error') borderColor = '#ef4444';
+        
+        scanResult.style.borderColor = borderColor;
+        scanResultContent.innerHTML = message;
+        scanResult.style.display = 'block';
+        
+        // Hide after 5 seconds for non-error messages
+        if (type !== 'error') {
+          setTimeout(() => {
+            scanResult.style.display = 'none';
+          }, 5000);
+        }
       }
 
       // Toggle details visibility
