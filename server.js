@@ -427,7 +427,15 @@ async function analyzeCarImage(imageDataUrl) {
   console.log('OpenAI content:', content);
   
   try {
-    return JSON.parse(content);
+    // Remove markdown code blocks if present
+    let cleanContent = content.trim();
+    if (cleanContent.startsWith('```json')) {
+      cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanContent.startsWith('```')) {
+      cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+    
+    return JSON.parse(cleanContent);
   } catch (e) {
     console.error('Failed to parse OpenAI response as JSON:', content);
     throw new Error('Failed to parse OpenAI response as JSON');
