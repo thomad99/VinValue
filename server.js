@@ -720,36 +720,211 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     steps.push('Filling Vehicle Condition: ZIP code');
     if (progressCallback) progressCallback('Entering ZIP code...');
     let zipFilled = false;
-    try {
-      const zipEl = page.getByPlaceholder(/Enter\s+ZIP\s+Code/i);
-      await zipEl.waitFor({ state: 'visible', timeout: 10000 });
-      await zipEl.fill(String(zip));
-      zipFilled = true;
-    } catch (_) {}
-    if (!zipFilled) {
-      const zipSelectors = ['input[name*="zip" i]','input[name*="postal" i]','input[placeholder*="zip" i]'];
-      for (const sel of zipSelectors) {
-        const el = page.locator(sel).first();
-        if (await el.count()) { await el.fill(String(zip)); zipFilled = true; break; }
+    
+    const zipApproaches = [
+      // Approach 1: By placeholder text
+      async () => {
+        console.log('Trying ZIP approach 1: placeholder text');
+        const zipEl = page.getByPlaceholder(/Enter\s+ZIP\s+Code/i);
+        await zipEl.waitFor({ state: 'visible', timeout: 15000 });
+        await zipEl.fill(String(zip));
+        console.log('ZIP approach 1 success: filled by placeholder');
+        return true;
+      },
+      // Approach 2: By name attributes
+      async () => {
+        console.log('Trying ZIP approach 2: name attributes');
+        const selectors = [
+          'input[name*="zip" i]',
+          'input[name*="postal" i]',
+          'input[name*="zipcode" i]'
+        ];
+        for (const sel of selectors) {
+          const el = page.locator(sel).first();
+          if (await el.count()) {
+            await el.fill(String(zip));
+            console.log(`ZIP approach 2 success: filled by selector ${sel}`);
+            return true;
+          }
+        }
+        return false;
+      },
+      // Approach 3: By placeholder variations
+      async () => {
+        console.log('Trying ZIP approach 3: placeholder variations');
+        const selectors = [
+          'input[placeholder*="zip" i]',
+          'input[placeholder*="postal" i]',
+          'input[placeholder*="code" i]'
+        ];
+        for (const sel of selectors) {
+          const el = page.locator(sel).first();
+          if (await el.count()) {
+            await el.fill(String(zip));
+            console.log(`ZIP approach 3 success: filled by selector ${sel}`);
+            return true;
+          }
+        }
+        return false;
+      },
+      // Approach 4: By label text
+      async () => {
+        console.log('Trying ZIP approach 4: label text');
+        const labels = page.locator('label');
+        const labelCount = await labels.count();
+        for (let i = 0; i < labelCount; i++) {
+          const label = labels.nth(i);
+          const labelText = await label.textContent();
+          if (labelText && (labelText.toLowerCase().includes('zip') || 
+                           labelText.toLowerCase().includes('postal'))) {
+            const forAttr = await label.getAttribute('for');
+            const input = page.locator(`input[id="${forAttr}"]`);
+            if (await input.count()) {
+              await input.fill(String(zip));
+              console.log(`ZIP approach 4 success: filled by label "${labelText}"`);
+              return true;
+            }
+          }
+        }
+        return false;
       }
+    ];
+    
+    for (let i = 0; i < zipApproaches.length; i++) {
+      try {
+        console.log(`Trying ZIP approach ${i + 1}...`);
+        zipFilled = await zipApproaches[i]();
+        if (zipFilled) {
+          console.log(`Successfully filled ZIP using approach ${i + 1}`);
+          break;
+        }
+      } catch (e) {
+        console.log(`ZIP approach ${i + 1} failed:`, e.message);
+        continue;
+      }
+    }
+    
+    if (!zipFilled) {
+      console.log('All ZIP approaches failed, taking debug screenshot...');
+      try {
+        const shotsDir = path.join(__dirname, 'public', 'shots');
+        if (!fs.existsSync(shotsDir)) fs.mkdirSync(shotsDir, { recursive: true });
+        const name = `zip-debug-${Date.now()}.png`;
+        const filePath = path.join(shotsDir, name);
+        await page.screenshot({ path: filePath, fullPage: true });
+        console.log(`ZIP debug screenshot saved: ${name}`);
+      } catch (_) {}
     }
 
     // Email (placeholder "Enter Email Address")
     steps.push('Filling Vehicle Condition: email');
     if (progressCallback) progressCallback('Entering email address...');
     let emailFilled = false;
-    try {
-      const emailEl = page.getByPlaceholder(/Enter\s+Email\s+Address/i);
-      await emailEl.waitFor({ state: 'visible', timeout: 10000 });
-      await emailEl.fill(email);
-      emailFilled = true;
-    } catch (_) {}
-    if (!emailFilled) {
-      const emailSelectors = ['input[type="email"]','input[name*="email" i]','input[placeholder*="email" i]'];
-      for (const sel of emailSelectors) {
-        const el = page.locator(sel).first();
-        if (await el.count()) { await el.fill(email); emailFilled = true; break; }
+    
+    const emailApproaches = [
+      // Approach 1: By placeholder text
+      async () => {
+        console.log('Trying email approach 1: placeholder text');
+        const emailEl = page.getByPlaceholder(/Enter\s+Email\s+Address/i);
+        await emailEl.waitFor({ state: 'visible', timeout: 15000 });
+        await emailEl.fill(email);
+        console.log('Email approach 1 success: filled by placeholder');
+        return true;
+      },
+      // Approach 2: By input type
+      async () => {
+        console.log('Trying email approach 2: input type');
+        const emailEl = page.locator('input[type="email"]').first();
+        if (await emailEl.count()) {
+          await emailEl.fill(email);
+          console.log('Email approach 2 success: filled by type="email"');
+          return true;
+        }
+        return false;
+      },
+      // Approach 3: By name attributes
+      async () => {
+        console.log('Trying email approach 3: name attributes');
+        const selectors = [
+          'input[name*="email" i]',
+          'input[name*="mail" i]',
+          'input[name*="address" i]'
+        ];
+        for (const sel of selectors) {
+          const el = page.locator(sel).first();
+          if (await el.count()) {
+            await el.fill(email);
+            console.log(`Email approach 3 success: filled by selector ${sel}`);
+            return true;
+          }
+        }
+        return false;
+      },
+      // Approach 4: By placeholder variations
+      async () => {
+        console.log('Trying email approach 4: placeholder variations');
+        const selectors = [
+          'input[placeholder*="email" i]',
+          'input[placeholder*="mail" i]',
+          'input[placeholder*="address" i]'
+        ];
+        for (const sel of selectors) {
+          const el = page.locator(sel).first();
+          if (await el.count()) {
+            await el.fill(email);
+            console.log(`Email approach 4 success: filled by selector ${sel}`);
+            return true;
+          }
+        }
+        return false;
+      },
+      // Approach 5: By label text
+      async () => {
+        console.log('Trying email approach 5: label text');
+        const labels = page.locator('label');
+        const labelCount = await labels.count();
+        for (let i = 0; i < labelCount; i++) {
+          const label = labels.nth(i);
+          const labelText = await label.textContent();
+          if (labelText && (labelText.toLowerCase().includes('email') || 
+                           labelText.toLowerCase().includes('mail'))) {
+            const forAttr = await label.getAttribute('for');
+            const input = page.locator(`input[id="${forAttr}"]`);
+            if (await input.count()) {
+              await input.fill(email);
+              console.log(`Email approach 5 success: filled by label "${labelText}"`);
+              return true;
+            }
+          }
+        }
+        return false;
       }
+    ];
+    
+    for (let i = 0; i < emailApproaches.length; i++) {
+      try {
+        console.log(`Trying email approach ${i + 1}...`);
+        emailFilled = await emailApproaches[i]();
+        if (emailFilled) {
+          console.log(`Successfully filled email using approach ${i + 1}`);
+          break;
+        }
+      } catch (e) {
+        console.log(`Email approach ${i + 1} failed:`, e.message);
+        continue;
+      }
+    }
+    
+    if (!emailFilled) {
+      console.log('All email approaches failed, taking debug screenshot...');
+      try {
+        const shotsDir = path.join(__dirname, 'public', 'shots');
+        if (!fs.existsSync(shotsDir)) fs.mkdirSync(shotsDir, { recursive: true });
+        const name = `email-debug-${Date.now()}.png`;
+        const filePath = path.join(shotsDir, name);
+        await page.screenshot({ path: filePath, fullPage: true });
+        console.log(`Email debug screenshot saved: ${name}`);
+      } catch (_) {}
     }
 
     // Click See your valuation
