@@ -66,188 +66,7 @@ async function launchChromium() {
   }
 }
 
-async function fetchMarketValue(vin, progressCallback = null) {
-  if (!vin || !vin.trim()) return null;
-  
-  try {
-    if (progressCallback) progressCallback('Getting market value from VinAudit...');
-    
-    const browser = await launchChromium();
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    
-    // Try different VinAudit URL formats
-    const urls = [
-      `https://vinaudit.com/vin/${vin}/market-value`,
-      `https://vinaudit.com/vin/${vin}`,
-      `https://vinaudit.com/check/${vin}`
-    ];
-    
-    let success = false;
-    for (const url of urls) {
-      try {
-        console.log(`Trying VinAudit URL: ${url}`);
-        await page.goto(url, { 
-          waitUntil: 'domcontentloaded', 
-          timeout: 30000 
-        });
-        
-        const currentUrl = page.url();
-        const pageTitle = await page.title();
-        console.log(`Current URL: ${currentUrl}, Title: ${pageTitle}`);
-        
-        // Check if we have market value content
-        const bodyText = await page.textContent('body');
-        if (bodyText.includes('Market Value') || bodyText.includes('Market Average') || bodyText.includes('$')) {
-          console.log('Found market value content, proceeding...');
-          success = true;
-          break;
-        }
-      } catch (e) {
-        console.log(`Failed to load ${url}:`, e.message);
-        continue;
-      }
-    }
-    
-    if (!success) {
-      throw new Error('Could not access VinAudit market value data');
-    }
-    
-    // Wait for the market value chart to load
-    await page.waitForTimeout(3000);
-    
-    // Take screenshot of the market value section
-    let marketValueShot = null;
-    try {
-      const shotsDir = path.join(__dirname, 'public', 'shots');
-      if (!fs.existsSync(shotsDir)) fs.mkdirSync(shotsDir, { recursive: true });
-      
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const shotPath = path.join(shotsDir, `market-value-${timestamp}.png`);
-      
-      // Try to capture just the market value section
-      const marketValueSection = page.locator('text=/Market Value/i').first();
-      if (await marketValueSection.count()) {
-        await marketValueSection.screenshot({ path: shotPath });
-        marketValueShot = `/shots/market-value-${timestamp}.png`;
-      } else {
-        // Fallback to full page screenshot
-        await page.screenshot({ path: shotPath, fullPage: true });
-        marketValueShot = `/shots/market-value-${timestamp}.png`;
-      }
-    } catch (e) {
-      console.log('Could not take market value screenshot:', e.message);
-    }
-    
-    // Extract market value data
-    let marketData = {
-      average: null,
-      belowMarket: null,
-      aboveMarket: null,
-      range: null,
-      certainty: null,
-      sampleSize: null
-    };
-    
-    try {
-      // Get all text content from the page
-      const averageText = await page.textContent('body');
-      console.log('Page content length:', averageText.length);
-      console.log('First 500 chars:', averageText.substring(0, 500));
-      
-      // Look for market average with multiple patterns
-      const averagePatterns = [
-        /Market Average.*?\$([\d,]+)/i,
-        /Average.*?\$([\d,]+)/i,
-        /\$([\d,]+).*?average/i,
-        /Market Value.*?\$([\d,]+)/i
-      ];
-      
-      for (const pattern of averagePatterns) {
-        const match = averageText.match(pattern);
-        if (match) {
-          marketData.average = parseInt(match[1].replace(/,/g, ''));
-          console.log('Found market average:', marketData.average);
-          break;
-        }
-      }
-      
-      // Look for below market value
-      const belowPatterns = [
-        /Below Market.*?\$([\d,]+)/i,
-        /Low.*?\$([\d,]+)/i,
-        /Minimum.*?\$([\d,]+)/i
-      ];
-      
-      for (const pattern of belowPatterns) {
-        const match = averageText.match(pattern);
-        if (match) {
-          marketData.belowMarket = parseInt(match[1].replace(/,/g, ''));
-          console.log('Found below market:', marketData.belowMarket);
-          break;
-        }
-      }
-      
-      // Look for above market value
-      const abovePatterns = [
-        /Above Market.*?\$([\d,]+)/i,
-        /High.*?\$([\d,]+)/i,
-        /Maximum.*?\$([\d,]+)/i
-      ];
-      
-      for (const pattern of abovePatterns) {
-        const match = averageText.match(pattern);
-        if (match) {
-          marketData.aboveMarket = parseInt(match[1].replace(/,/g, ''));
-          console.log('Found above market:', marketData.aboveMarket);
-          break;
-        }
-      }
-      
-      // Look for estimate certainty
-      const certaintyMatch = averageText.match(/Estimate Certainty.*?(\d+)%/i);
-      if (certaintyMatch) {
-        marketData.certainty = parseInt(certaintyMatch[1]);
-        console.log('Found certainty:', marketData.certainty);
-      }
-      
-      // Look for sample size
-      const sampleMatch = averageText.match(/(\d+)\s+similar vehicles/i);
-      if (sampleMatch) {
-        marketData.sampleSize = parseInt(sampleMatch[1]);
-        console.log('Found sample size:', marketData.sampleSize);
-      }
-      
-      // If we still don't have an average, try to find any reasonable price
-      if (!marketData.average) {
-        const priceMatches = averageText.match(/\$([\d,]+)/g);
-        if (priceMatches && priceMatches.length > 0) {
-          // Take the first reasonable price (likely the main valuation)
-          const firstPrice = priceMatches[0].replace(/[$,]/g, '');
-          const priceValue = parseInt(firstPrice);
-          if (priceValue > 1000 && priceValue < 200000) { // Reasonable car price range
-            marketData.average = priceValue;
-            console.log('Using first reasonable price as average:', marketData.average);
-          }
-        }
-      }
-      
-    } catch (e) {
-      console.log('Could not extract market value data:', e.message);
-    }
-    
-    await browser.close();
-    
-    return {
-      ...marketData,
-      screenshot: marketValueShot
-    };
-    
-  } catch (error) {
-    console.error('Market value lookup failed:', error);
-    return null;
-  }
-}
+// Market value integration removed
 
 async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT_EMAIL, make, model, year }, progressCallback = null) {
   const browser = await launchChromium();
@@ -481,8 +300,106 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
         console.log('Error handling custom dropdowns:', e.message);
       }
       
+      // Try to find and click any dropdown that might be a custom component
+      try {
+        const dropdownTriggers = await page.locator('[class*="dropdown"], [class*="select"], [data-testid*="dropdown"], [data-testid*="select"]').all();
+        console.log(`Found ${dropdownTriggers.length} potential dropdown triggers`);
+        
+        for (const trigger of dropdownTriggers) {
+          const isVisible = await trigger.isVisible();
+          const text = await trigger.textContent();
+          console.log(`Dropdown trigger: visible=${isVisible}, text="${text}"`);
+          
+          if (isVisible && text && (text.includes('Select') || text.includes('Body Type'))) {
+            console.log('Clicking dropdown trigger:', text);
+            await trigger.click();
+            await page.waitForTimeout(1500);
+            
+            // Look for any clickable options that appeared
+            const options = await page.locator('[role="option"], .option, li, div[class*="option"], span[class*="option"]').all();
+            console.log(`Found ${options.length} options after clicking trigger`);
+            
+            if (options.length > 0) {
+              const firstOption = options[0];
+              const optionText = await firstOption.textContent();
+              console.log(`Clicking first option: ${optionText}`);
+              await firstOption.click();
+              selections.push(optionText);
+              steps.push(`Selected dropdown option: ${optionText}`);
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Error handling dropdown triggers:', e.message);
+      }
+      
       if (dropdownsFilled === 0) {
         steps.push('No standard dropdowns found to fill');
+      }
+      
+      // Try a more aggressive approach to find the Body Type dropdown
+      try {
+        console.log('Trying aggressive Body Type dropdown detection...');
+        
+        // Look for any element that contains "Body Type" text
+        const bodyTypeElements = await page.locator('text=/Body Type/i').all();
+        console.log(`Found ${bodyTypeElements.length} elements containing "Body Type"`);
+        
+        for (const element of bodyTypeElements) {
+          const isVisible = await element.isVisible();
+          const tagName = await element.evaluate(el => el.tagName);
+          const parent = element.locator('..');
+          const parentTagName = await parent.evaluate(el => el.tagName);
+          
+          console.log(`Body Type element: visible=${isVisible}, tag=${tagName}, parent=${parentTagName}`);
+          
+          if (isVisible) {
+            // Try clicking the element itself
+            try {
+              await element.click();
+              console.log('Clicked Body Type element directly');
+              await page.waitForTimeout(1000);
+              
+              // Look for options
+              const options = await page.locator('[role="option"], .option, li, div[class*="option"], span[class*="option"]').all();
+              if (options.length > 0) {
+                const firstOption = options[0];
+                const optionText = await firstOption.textContent();
+                console.log(`Clicking first option: ${optionText}`);
+                await firstOption.click();
+                selections.push(optionText);
+                steps.push(`Selected Body Type option: ${optionText}`);
+                break;
+              }
+            } catch (e) {
+              console.log('Could not click Body Type element directly:', e.message);
+            }
+            
+            // Try clicking the parent element
+            try {
+              await parent.click();
+              console.log('Clicked Body Type parent element');
+              await page.waitForTimeout(1000);
+              
+              // Look for options
+              const options = await page.locator('[role="option"], .option, li, div[class*="option"], span[class*="option"]').all();
+              if (options.length > 0) {
+                const firstOption = options[0];
+                const optionText = await firstOption.textContent();
+                console.log(`Clicking first option: ${optionText}`);
+                await firstOption.click();
+                selections.push(optionText);
+                steps.push(`Selected Body Type option: ${optionText}`);
+                break;
+              }
+            } catch (e) {
+              console.log('Could not click Body Type parent:', e.message);
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Error in aggressive Body Type detection:', e.message);
       }
       
       // Wait a moment for any dynamic updates
@@ -523,16 +440,52 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
         // Wait for Vehicle Condition page to load
         await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
       } else {
-        console.log('Could not find or click continue button');
-        // Take debug screenshot
+        console.log('Could not find or click continue button, trying fallback approach...');
+        
+        // Fallback: Try to find any clickable element that might proceed
         try {
-          const shotsDir = path.join(__dirname, 'public', 'shots');
-          if (!fs.existsSync(shotsDir)) fs.mkdirSync(shotsDir, { recursive: true });
-          const name = `vehicle-details-debug-${Date.now()}.png`;
-          const filePath = path.join(shotsDir, name);
-          await page.screenshot({ path: filePath, fullPage: true });
-          console.log(`Vehicle Details debug screenshot saved: ${name}`);
-        } catch (_) {}
+          const allButtons = await page.locator('button, a, [role="button"], [onclick]').all();
+          console.log(`Found ${allButtons.length} potential clickable elements`);
+          
+          for (const button of allButtons) {
+            const isVisible = await button.isVisible();
+            const text = await button.textContent();
+            const isEnabled = await button.isEnabled();
+            
+            console.log(`Button: visible=${isVisible}, enabled=${isEnabled}, text="${text}"`);
+            
+            if (isVisible && isEnabled && text && (
+              text.toLowerCase().includes('continue') || 
+              text.toLowerCase().includes('next') || 
+              text.toLowerCase().includes('proceed') ||
+              text.toLowerCase().includes('step 3')
+            )) {
+              console.log(`Trying to click fallback button: ${text}`);
+              await button.click();
+              continued = true;
+              steps.push(`Clicked fallback button: ${text}`);
+              break;
+            }
+          }
+          
+          if (continued) {
+            await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
+          }
+        } catch (e) {
+          console.log('Fallback button clicking failed:', e.message);
+        }
+        
+        if (!continued) {
+          // Take debug screenshot
+          try {
+            const shotsDir = path.join(__dirname, 'public', 'shots');
+            if (!fs.existsSync(shotsDir)) fs.mkdirSync(shotsDir, { recursive: true });
+            const name = `vehicle-details-debug-${Date.now()}.png`;
+            const filePath = path.join(shotsDir, name);
+            await page.screenshot({ path: filePath, fullPage: true });
+            console.log(`Vehicle Details debug screenshot saved: ${name}`);
+          } catch (_) {}
+        }
       }
     }
 
@@ -1000,22 +953,10 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       throw new Error('Could not find valuation on the page. The site may have changed.');
     }
 
-    // Get market value if we have a VIN
-    let marketValue = null;
-    if (vin && vin.trim()) {
-      try {
-        console.log(`Starting market value lookup for VIN: ${vin}`);
-        marketValue = await fetchMarketValue(vin, progressCallback);
-        console.log('Market value result:', marketValue);
-      } catch (e) {
-        console.error('Market value lookup failed:', e.message);
-        console.error('Error stack:', e.stack);
-      }
-    }
+    // Market value integration removed
 
     return { 
       valuation: valuationText, 
-      marketValue,
       steps, 
       selections, // Include dropdown selections
       screenshots: { filled: filledShot, result: resultShot } 

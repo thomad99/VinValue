@@ -50,6 +50,15 @@
       .vin-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; }
       .result { margin-top: 16px; padding: 12px; border-radius: 8px; border: 1px solid #1f2937; background: #0b1020; }
       .muted { color: #94a3b8; font-size: 13px; }
+      #progress { 
+        background: #1f2937; 
+        padding: 12px; 
+        border-radius: 6px; 
+        margin: 8px 0; 
+        border-left: 4px solid #3b82f6;
+        font-weight: 500;
+        min-height: 20px;
+      }
       a { color: #93c5fd; }
       .logo { display: block; margin: 8px auto 8px; max-width: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
     </style>
@@ -86,15 +95,10 @@
         <div id="scanResultContent"></div>
       </div>
       <div id="result" class="result" hidden>
-        <div id="valuations" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-          <div id="webuyValue" style="text-align: center; padding: 16px; background: #1f2937; border-radius: 8px; border: 1px solid #374151;">
-            <h3 style="margin: 0 0 8px; color: #3b82f6; font-size: 16px;">WeBuyAnyCar</h3>
-            <div id="webuyPrice" style="font-size: 32px; font-weight: 800; color: #10b981;"></div>
-          </div>
-          <div id="marketValue" style="text-align: center; padding: 16px; background: #1f2937; border-radius: 8px; border: 1px solid #374151;">
-            <h3 style="margin: 0 0 8px; color: #8b5cf6; font-size: 16px;">Market Value</h3>
-            <div id="marketPrice" style="font-size: 32px; font-weight: 800; color: #f59e0b;"></div>
-            <div id="marketDetails" style="font-size: 12px; color: #9ca3af; margin-top: 4px;"></div>
+        <div id="valuations" style="margin-bottom: 20px;">
+          <div id="webuyValue" style="text-align: center; padding: 20px; background: #1f2937; border-radius: 8px; border: 1px solid #374151;">
+            <h3 style="margin: 0 0 8px; color: #3b82f6; font-size: 18px;">WeBuyAnyCar Valuation</h3>
+            <div id="webuyPrice" style="font-size: 36px; font-weight: 800; color: #10b981;"></div>
           </div>
         </div>
         <div id="details" style="margin-top: 12px;">
@@ -112,8 +116,6 @@
       const form = document.getElementById('valueForm');
       const result = document.getElementById('result');
       const webuyPrice = document.getElementById('webuyPrice');
-      const marketPrice = document.getElementById('marketPrice');
-      const marketDetails = document.getElementById('marketDetails');
       const error = document.getElementById('error');
       const progress = document.getElementById('progress');
       const shots = document.getElementById('shots');
@@ -136,8 +138,6 @@
         console.log('Form submitted!');
         result.hidden = true;
         webuyPrice.textContent = '';
-        marketPrice.textContent = '';
-        marketDetails.textContent = '';
         error.textContent = '';
         submit.disabled = true;
         submit.textContent = 'Working…';
@@ -178,20 +178,23 @@
             payload.model = window.detectedCarDetails.model;
             payload.year = window.detectedCarDetails.year;
           }
-          // Show progress updates
+          // Show progress updates - start with initial message
+          progress.textContent = 'Starting valuation process...';
+          
+          // Set up detailed progress updates that cycle through realistic steps
           const progressSteps = [
             'Starting valuation process...',
-            'Navigating to website...',
+            'Navigating to WeBuyAnyCar website...',
             payload.vin ? 'Entering VIN number...' : 'Using Make & Model lookup...',
-            payload.vin ? 'Waiting for page load...' : 'Selecting year...',
-            payload.vin ? 'Entering mileage...' : 'Selecting make...',
-            payload.vin ? 'Entering ZIP code...' : 'Selecting model...',
-            payload.vin ? 'Entering email address...' : 'Entering mileage...',
-            payload.vin ? 'Clicking Get Valuation...' : 'Entering ZIP code...',
-            payload.vin ? 'Waiting for valuation result...' : 'Entering email address...',
-            'Clicking Get Valuation...',
-            'Waiting for valuation result...',
-            'Getting market value comparison...'
+            payload.vin ? 'Waiting for vehicle details to load...' : 'Selecting vehicle year...',
+            payload.vin ? 'Processing vehicle information...' : 'Selecting vehicle make...',
+            payload.vin ? 'Entering vehicle mileage...' : 'Selecting vehicle model...',
+            payload.vin ? 'Entering ZIP code...' : 'Entering vehicle mileage...',
+            payload.vin ? 'Entering email address...' : 'Entering ZIP code...',
+            payload.vin ? 'Clicking Get Valuation button...' : 'Entering email address...',
+            payload.vin ? 'Waiting for valuation calculation...' : 'Clicking Get Valuation button...',
+            payload.vin ? 'Processing valuation result...' : 'Waiting for valuation calculation...',
+            'Finalizing results...'
           ];
           
           let stepIndex = 0;
@@ -199,8 +202,11 @@
             if (stepIndex < progressSteps.length) {
               progress.textContent = progressSteps[stepIndex];
               stepIndex++;
+            } else {
+              // If we've gone through all steps, show a "working" message
+              progress.textContent = 'Processing... Please wait...';
             }
-          }, 2000);
+          }, 1500); // Update every 1.5 seconds for better visibility
           
           console.log('Sending request to /api/value with payload:', payload);
           const res = await fetch('/api/value', {
@@ -218,8 +224,15 @@
           if (!res.ok) {
             // Server returned an error with debug info
             error.textContent = data.error || 'Failed';
-            if (data.steps) {
-              progress.textContent = data.steps.join('\n');
+            progress.textContent = 'Valuation failed - see details below';
+            progress.style.color = '#ef4444'; // Red color for error
+            
+            if (data.steps && data.steps.length > 0) {
+              // Create a detailed steps display for errors
+              const stepsDiv = document.createElement('div');
+              stepsDiv.style.cssText = 'margin-top: 8px; padding: 8px; background: #1f2937; border-radius: 4px; font-size: 14px; max-height: 200px; overflow-y: auto;';
+              stepsDiv.innerHTML = '<strong>Process Steps (Failed):</strong><br>' + data.steps.join('<br>');
+              progress.parentNode.insertBefore(stepsDiv, progress.nextSibling);
             }
             if (data.screenshots) {
               shots.innerHTML = '';
@@ -230,38 +243,28 @@
               if (links.length) shots.innerHTML = 'Screenshots: ' + links.join(' · ');
             }
             
-            // Add market value screenshot if available
-            if (data.marketValue && data.marketValue.screenshot) {
-              if (shots.innerHTML) shots.innerHTML += ' · ';
-              shots.innerHTML += `<a href="${data.marketValue.screenshot}" target="_blank" style="color: #60a5fa;">market value</a>`;
-            }
             return;
           }
           
           // Success case
           webuyPrice.textContent = `$${data.valuation}`;
-          progress.textContent = (data.steps || []).join('\n');
           
-          // Display market value if available
-          if (data.marketValue) {
-            if (data.marketValue.average) {
-              marketPrice.textContent = `$${data.marketValue.average.toLocaleString()}`;
-              
-              let details = [];
-              if (data.marketValue.certainty) details.push(`${data.marketValue.certainty}% certainty`);
-              if (data.marketValue.sampleSize) details.push(`${data.marketValue.sampleSize} similar vehicles`);
-              if (data.marketValue.belowMarket && data.marketValue.aboveMarket) {
-                details.push(`Range: $${data.marketValue.belowMarket.toLocaleString()} - $${data.marketValue.aboveMarket.toLocaleString()}`);
-              }
-              marketDetails.textContent = details.join(' • ');
-            } else {
-              marketPrice.textContent = 'N/A';
-              marketDetails.textContent = 'Market value not available';
-            }
+          // Display the actual steps from the server
+          if (data.steps && data.steps.length > 0) {
+            progress.textContent = 'Valuation completed successfully!';
+            progress.style.color = '#10b981'; // Green color for success
+            
+            // Create a detailed steps display
+            const stepsDiv = document.createElement('div');
+            stepsDiv.style.cssText = 'margin-top: 8px; padding: 8px; background: #1f2937; border-radius: 4px; font-size: 14px; max-height: 200px; overflow-y: auto;';
+            stepsDiv.innerHTML = '<strong>Process Steps:</strong><br>' + data.steps.join('<br>');
+            progress.parentNode.insertBefore(stepsDiv, progress.nextSibling);
           } else {
-            marketPrice.textContent = 'N/A';
-            marketDetails.textContent = 'VIN required for market value';
+            progress.textContent = 'Valuation completed!';
+            progress.style.color = '#10b981';
           }
+          
+          // Market value integration removed
           
           // Show dropdown selections if any
           if (data.selections && data.selections.length > 0) {
@@ -285,11 +288,6 @@
             if (links.length) shots.innerHTML = 'Screenshots: ' + links.join(' · ');
           }
           
-          // Add market value screenshot if available
-          if (data.marketValue && data.marketValue.screenshot) {
-            if (shots.innerHTML) shots.innerHTML += ' · ';
-            shots.innerHTML += `<a href="${data.marketValue.screenshot}" target="_blank" style="color: #60a5fa;">market value</a>`;
-          }
           
 
         } catch (err) {
