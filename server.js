@@ -539,35 +539,54 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     // Enter mileage (Vehicle Condition page has placeholder "Enter Vehicle Mileage")
     steps.push('Filling Vehicle Condition: mileage');
     if (progressCallback) progressCallback('Entering mileage...');
+    
+    // Wait for Vehicle Condition page to fully load
+    await page.waitForTimeout(3000);
+    
+    // Check current URL and page content
+    const currentUrl = page.url();
+    console.log(`Current URL when looking for mileage: ${currentUrl}`);
+    
+    // Get page title and content for debugging
+    const pageTitle = await page.title();
+    console.log(`Page title: ${pageTitle}`);
+    
     let mileageFilled = false;
     
     // Try multiple approaches to find and fill mileage
     const mileageApproaches = [
-      // Approach 1: By placeholder text
+      // Approach 1: By placeholder text (most common)
       async () => {
+        console.log('Trying approach 1: placeholder text');
         const mil = page.getByPlaceholder(/Enter\s+Vehicle\s+Mileage/i);
-        await mil.waitFor({ state: 'visible', timeout: 10000 });
+        await mil.waitFor({ state: 'visible', timeout: 15000 });
         await mil.fill(String(mileage));
+        console.log('Approach 1 success: filled by placeholder');
         return true;
       },
       // Approach 2: By placeholder variations
       async () => {
+        console.log('Trying approach 2: placeholder variations');
         const mil = page.getByPlaceholder(/odometer/i);
-        await mil.waitFor({ state: 'visible', timeout: 10000 });
+        await mil.waitFor({ state: 'visible', timeout: 15000 });
         await mil.fill(String(mileage));
+        console.log('Approach 2 success: filled by odometer placeholder');
         return true;
       },
       // Approach 3: By name attributes
       async () => {
+        console.log('Trying approach 3: name attributes');
         const selectors = [
           'input[name*="mileage" i]',
           'input[name*="odometer" i]',
-          'input[name*="miles" i]'
+          'input[name*="miles" i]',
+          'input[name*="vehicle" i]'
         ];
         for (const sel of selectors) {
           const el = page.locator(sel).first();
           if (await el.count()) {
             await el.fill(String(mileage));
+            console.log(`Approach 3 success: filled by selector ${sel}`);
             return true;
           }
         }
@@ -575,15 +594,22 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       },
       // Approach 4: By input type and context
       async () => {
+        console.log('Trying approach 4: input type and context');
         const numberInputs = page.locator('input[type="number"]');
         const count = await numberInputs.count();
+        console.log(`Found ${count} number inputs`);
         for (let i = 0; i < count; i++) {
           const input = numberInputs.nth(i);
           const placeholder = await input.getAttribute('placeholder');
+          const name = await input.getAttribute('name');
+          const id = await input.getAttribute('id');
+          console.log(`Input ${i}: placeholder="${placeholder}", name="${name}", id="${id}"`);
+          
           if (placeholder && (placeholder.toLowerCase().includes('mileage') || 
                              placeholder.toLowerCase().includes('odometer') ||
                              placeholder.toLowerCase().includes('miles'))) {
             await input.fill(String(mileage));
+            console.log(`Approach 4 success: filled by number input with mileage placeholder`);
             return true;
           }
         }
@@ -591,16 +617,55 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       },
       // Approach 5: By label text
       async () => {
+        console.log('Trying approach 5: label text');
         const labels = page.locator('label');
         const labelCount = await labels.count();
+        console.log(`Found ${labelCount} labels`);
         for (let i = 0; i < labelCount; i++) {
           const label = labels.nth(i);
           const labelText = await label.textContent();
+          console.log(`Label ${i}: "${labelText}"`);
           if (labelText && (labelText.toLowerCase().includes('mileage') || 
                            labelText.toLowerCase().includes('odometer'))) {
-            const input = page.locator(`input[id="${await label.getAttribute('for')}"]`);
+            const forAttr = await label.getAttribute('for');
+            const input = page.locator(`input[id="${forAttr}"]`);
             if (await input.count()) {
               await input.fill(String(mileage));
+              console.log(`Approach 5 success: filled by label "${labelText}"`);
+              return true;
+            }
+          }
+        }
+        return false;
+      },
+      // Approach 6: By any input that looks like mileage
+      async () => {
+        console.log('Trying approach 6: any input that looks like mileage');
+        const allInputs = page.locator('input');
+        const inputCount = await allInputs.count();
+        console.log(`Found ${inputCount} total inputs`);
+        
+        for (let i = 0; i < inputCount; i++) {
+          const input = allInputs.nth(i);
+          const placeholder = await input.getAttribute('placeholder');
+          const name = await input.getAttribute('name');
+          const id = await input.getAttribute('id');
+          const type = await input.getAttribute('type');
+          
+          console.log(`Input ${i}: type="${type}", placeholder="${placeholder}", name="${name}", id="${id}"`);
+          
+          if (type === 'text' || type === 'number') {
+            if ((placeholder && (placeholder.toLowerCase().includes('mileage') || 
+                                placeholder.toLowerCase().includes('odometer') ||
+                                placeholder.toLowerCase().includes('miles'))) ||
+                (name && (name.toLowerCase().includes('mileage') || 
+                         name.toLowerCase().includes('odometer') ||
+                         name.toLowerCase().includes('miles'))) ||
+                (id && (id.toLowerCase().includes('mileage') || 
+                       id.toLowerCase().includes('odometer') ||
+                       id.toLowerCase().includes('miles')))) {
+              await input.fill(String(mileage));
+              console.log(`Approach 6 success: filled by input with mileage-related attributes`);
               return true;
             }
           }
@@ -609,20 +674,22 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       }
     ];
     
-    for (const approach of mileageApproaches) {
+    for (let i = 0; i < mileageApproaches.length; i++) {
       try {
-        mileageFilled = await approach();
+        console.log(`Trying mileage approach ${i + 1}...`);
+        mileageFilled = await mileageApproaches[i]();
         if (mileageFilled) {
-          console.log('Successfully filled mileage using approach');
+          console.log(`Successfully filled mileage using approach ${i + 1}`);
           break;
         }
       } catch (e) {
-        console.log('Mileage approach failed:', e.message);
+        console.log(`Mileage approach ${i + 1} failed:`, e.message);
         continue;
       }
     }
     
     if (!mileageFilled) {
+      console.log('All mileage approaches failed, taking debug screenshot...');
       // Take a screenshot to help debug
       try {
         const shotsDir = path.join(__dirname, 'public', 'shots');
@@ -631,6 +698,19 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
         const filePath = path.join(shotsDir, name);
         await page.screenshot({ path: filePath, fullPage: true });
         console.log(`Debug screenshot saved: ${name}`);
+        
+        // Also log all input elements on the page
+        const allInputs = page.locator('input');
+        const inputCount = await allInputs.count();
+        console.log(`Page has ${inputCount} input elements total`);
+        for (let i = 0; i < Math.min(inputCount, 10); i++) {
+          const input = allInputs.nth(i);
+          const placeholder = await input.getAttribute('placeholder');
+          const name = await input.getAttribute('name');
+          const id = await input.getAttribute('id');
+          const type = await input.getAttribute('type');
+          console.log(`Input ${i}: type="${type}", placeholder="${placeholder}", name="${name}", id="${id}"`);
+        }
       } catch (_) {}
       
       throw new Error('Could not find mileage/odometer input field');
