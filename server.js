@@ -398,6 +398,32 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
             }
           }
         }
+        
+        // Try clicking anywhere in the dropdown area to trigger it
+        try {
+          const dropdownArea = page.locator('text=/Select Body Type/i').first();
+          if (await dropdownArea.count()) {
+            console.log('Trying to click dropdown area to trigger it');
+            await dropdownArea.click();
+            await page.waitForTimeout(1500);
+            
+            // Look for any options that appeared
+            const options = await page.locator('[role="option"], .option, li, div[class*="option"], span[class*="option"], [class*="item"]').all();
+            console.log(`Found ${options.length} options after clicking dropdown area`);
+            
+            if (options.length > 0) {
+              const firstOption = options[0];
+              const optionText = await firstOption.textContent();
+              console.log(`Clicking first option: ${optionText}`);
+              await firstOption.click();
+              selections.push(optionText);
+              steps.push(`Selected Body Type option: ${optionText}`);
+            }
+          }
+        } catch (e) {
+          console.log('Error clicking dropdown area:', e.message);
+        }
+        
       } catch (e) {
         console.log('Error in aggressive Body Type detection:', e.message);
       }
@@ -489,6 +515,17 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       }
     }
 
+    // Check if we're still on Vehicle Details page - if so, we need to complete it first
+    const currentUrl = page.url();
+    const pageTitle = await page.title();
+    console.log(`Current URL: ${currentUrl}`);
+    console.log(`Page title: ${pageTitle}`);
+    
+    if (currentUrl.includes('vehicledetails') || currentUrl.includes('vehicle-details') || pageTitle.includes('Vehicle Details')) {
+      console.log('Still on Vehicle Details page - need to complete it first');
+      throw new Error('Still on Vehicle Details page - Body Type selection failed. Please check the Vehicle Details page handling.');
+    }
+    
     // Enter mileage (Vehicle Condition page has placeholder "Enter Vehicle Mileage")
     steps.push('Filling Vehicle Condition: mileage');
     if (progressCallback) progressCallback('Entering mileage...');
@@ -501,9 +538,16 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     console.log(`Current URL when looking for mileage: ${mileagePageUrl}`);
     
     // Get page title and content for debugging
-    const pageTitle = await page.title();
-    console.log(`Page title: ${pageTitle}`);
+    const mileagePageTitle = await page.title();
+    console.log(`Page title: ${mileagePageTitle}`);
     
+    // Verify we're on the Vehicle Condition page
+    if (!mileagePageUrl.includes('vehiclecondition') && !mileagePageUrl.includes('vehicle-condition') && !mileagePageTitle.includes('Vehicle Condition')) {
+      console.log('Not on Vehicle Condition page - cannot find mileage input');
+      throw new Error(`Not on Vehicle Condition page. Current page: ${mileagePageTitle} (${mileagePageUrl})`);
+    }
+    
+    console.log('Confirmed on Vehicle Condition page - looking for mileage input');
     let mileageFilled = false;
     
     // Try multiple approaches to find and fill mileage
