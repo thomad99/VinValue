@@ -217,7 +217,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       steps.push('On Vehicle Details page - filling all dropdowns');
       
       // Wait for page to fully load
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(5000);
       
       // Find all dropdowns/selects on the page
       const allSelects = await page.locator('select').all();
@@ -253,6 +253,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
                 const selectionText = text.trim();
                 steps.push(`Selected dropdown option: ${selectionText}`);
                 selections.push(selectionText); // Record the selection
+                await page.waitForTimeout(1000); // Wait after each selection
                 break;
               }
             }
@@ -431,6 +432,35 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
       // Wait a moment for any dynamic updates
       await page.waitForTimeout(2000);
       
+      // Try to click any visible dropdowns that might have appeared
+      try {
+        console.log('Looking for any remaining dropdowns to click...');
+        const allClickableDropdowns = await page.locator('[class*="dropdown"], [class*="select"], [role="combobox"], [data-testid*="dropdown"]').all();
+        
+        for (const dropdown of allClickableDropdowns) {
+          const isVisible = await dropdown.isVisible();
+          if (isVisible) {
+            console.log('Clicking visible dropdown element');
+            await dropdown.click();
+            await page.waitForTimeout(1000);
+            
+            // Look for options and select first one
+            const options = await page.locator('[role="option"], .option, li, div[class*="option"], span[class*="option"]').all();
+            if (options.length > 0) {
+              const firstOption = options[0];
+              const optionText = await firstOption.textContent();
+              console.log(`Selecting option: ${optionText}`);
+              await firstOption.click();
+              selections.push(optionText);
+              steps.push(`Selected option: ${optionText}`);
+              await page.waitForTimeout(1000);
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Error handling remaining dropdowns:', e.message);
+      }
+      
       // Click Continue to proceed to Vehicle Condition page
       const continueSelectors = [
         'button:has-text("Continue to Step 3")',
@@ -454,6 +484,7 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
               await btn.click();
               continued = true;
               steps.push('Clicked Continue to proceed to Vehicle Condition');
+              await page.waitForTimeout(3000); // Wait for navigation
               break;
             }
           }
@@ -462,9 +493,53 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
         }
       }
       
+      // If first attempt failed, try again with a different approach
+      if (!continued) {
+        console.log('First continue attempt failed, trying alternative approach...');
+        try {
+          // Look for any button that might be the continue button
+          const allButtons = await page.locator('button, a, [role="button"]').all();
+          for (const button of allButtons) {
+            const text = await button.textContent();
+            const isVisible = await button.isVisible();
+            const isEnabled = await button.isEnabled();
+            
+            if (isVisible && isEnabled && text && (
+              text.toLowerCase().includes('continue') || 
+              text.toLowerCase().includes('next') || 
+              text.toLowerCase().includes('step 3')
+            )) {
+              console.log(`Trying alternative continue button: ${text}`);
+              await button.click();
+              continued = true;
+              steps.push(`Clicked alternative continue button: ${text}`);
+              await page.waitForTimeout(3000);
+              break;
+            }
+          }
+        } catch (e) {
+          console.log('Alternative continue approach failed:', e.message);
+        }
+      }
+      
       if (continued) {
         // Wait for Vehicle Condition page to load
         await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
+        
+        // Verify we're actually on the Vehicle Condition page
+        const newUrl = page.url();
+        const newTitle = await page.title();
+        console.log(`After continue click - URL: ${newUrl}, Title: ${newTitle}`);
+        
+        if (newUrl.includes('vehicledetails') || newUrl.includes('vehicle-details') || newTitle.includes('Vehicle Details')) {
+          console.log('Still on Vehicle Details page after continue click - trying one more time');
+          // Try clicking continue again
+          const continueBtn = page.locator('button:has-text("Continue to Step 3"), button:has-text("Continue")').first();
+          if (await continueBtn.count()) {
+            await continueBtn.click();
+            await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
+          }
+        }
       } else {
         console.log('Could not find or click continue button, trying fallback approach...');
         
