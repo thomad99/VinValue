@@ -544,8 +544,8 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     await page.waitForTimeout(3000);
     
     // Check current URL and page content
-    const currentUrl = page.url();
-    console.log(`Current URL when looking for mileage: ${currentUrl}`);
+    const mileagePageUrl = page.url();
+    console.log(`Current URL when looking for mileage: ${mileagePageUrl}`);
     
     // Get page title and content for debugging
     const pageTitle = await page.title();
