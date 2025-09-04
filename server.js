@@ -516,12 +516,12 @@ async function fetchValuation({ vin, mileage, zip = DEFAULT_ZIP, email = DEFAULT
     }
 
     // Check if we're still on Vehicle Details page - if so, we need to complete it first
-    const currentUrl = page.url();
-    const pageTitle = await page.title();
-    console.log(`Current URL: ${currentUrl}`);
-    console.log(`Page title: ${pageTitle}`);
+    const checkUrl = page.url();
+    const checkTitle = await page.title();
+    console.log(`Current URL: ${checkUrl}`);
+    console.log(`Page title: ${checkTitle}`);
     
-    if (currentUrl.includes('vehicledetails') || currentUrl.includes('vehicle-details') || pageTitle.includes('Vehicle Details')) {
+    if (checkUrl.includes('vehicledetails') || checkUrl.includes('vehicle-details') || checkTitle.includes('Vehicle Details')) {
       console.log('Still on Vehicle Details page - need to complete it first');
       throw new Error('Still on Vehicle Details page - Body Type selection failed. Please check the Vehicle Details page handling.');
     }
